@@ -69,6 +69,27 @@ python -m converter ocr \
   --output-dir "D:/books/ocr_output/test"
 ```
 
+For real books, avoid sending a whole PDF as one OCR job. Split it into small PDF batches:
+
+```bash
+python -m converter ocr \
+  --source-pdf "D:/books/test.pdf" \
+  --output-dir "D:/books/ocr_output/test" \
+  --batch-size 1
+```
+
+`--batch-size 1` submits one page per OCR job. `--batch-size 3` submits three pages per OCR job. On macOS, batch mode uses Swift/PDFKit when available; otherwise it falls back to `pypdf`.
+
+For testing only the first few pages of a large book:
+
+```bash
+python -m converter ocr \
+  --source-pdf "D:/books/test.pdf" \
+  --output-dir "D:/books/ocr_output/test_first6" \
+  --batch-size 3 \
+  --max-pages 6
+```
+
 Run OCR and build `.bookmd`:
 
 ```bash
@@ -76,6 +97,8 @@ python -m converter build-from-pdf \
   --source-pdf "D:/books/test.pdf" \
   --ocr-output "D:/books/ocr_output/test" \
   --output "D:/books/output/test.bookmd" \
+  --batch-size 1 \
+  --max-pages 20 \
   --translate false
 ```
 

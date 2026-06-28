@@ -30,6 +30,8 @@ def main(argv: list[str] | None = None) -> int:
     ocr_parser = subparsers.add_parser("ocr")
     ocr_parser.add_argument("--source-pdf", required=True)
     ocr_parser.add_argument("--output-dir", required=True)
+    ocr_parser.add_argument("--batch-size", type=int, default=0)
+    ocr_parser.add_argument("--max-pages", type=int)
 
     subparsers.add_parser("ocr-health")
 
@@ -41,6 +43,8 @@ def main(argv: list[str] | None = None) -> int:
     build_from_pdf_parser.add_argument("--target-lang", default="zh")
     build_from_pdf_parser.add_argument("--provider", default="noop")
     build_from_pdf_parser.add_argument("--config")
+    build_from_pdf_parser.add_argument("--batch-size", type=int, default=0)
+    build_from_pdf_parser.add_argument("--max-pages", type=int)
 
     validate_parser = subparsers.add_parser("validate")
     validate_parser.add_argument("bookmd")
@@ -106,6 +110,8 @@ def _ocr_options_from_args(args: argparse.Namespace) -> OcrOptions:
     return OcrOptions(
         source_pdf=Path(args.source_pdf),
         output_dir=Path(output_dir),
+        batch_size=int(getattr(args, "batch_size", 0) or 0),
+        max_pages=getattr(args, "max_pages", None),
     )
 
 

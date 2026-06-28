@@ -12,6 +12,7 @@ Phase 7 adds a generic HTTP OCR API adapter while keeping OCR model deployment o
   - `parse.log`
 - Add a converter CLI `ocr` command.
 - Add a converter CLI `build-from-pdf` command that runs OCR first, then builds `.bookmd`.
+- Support `--batch-size` and `--max-pages` so real books can be split into small OCR jobs instead of one long whole-PDF job.
 - Keep automated tests fully offline with fake transports.
 
 ## Generic OCR HTTP Contract
@@ -72,4 +73,5 @@ Asset entries are optional. This phase supports simple inline assets with `path`
 - OCR client tests do not call the network.
 - Missing `OCR_API_URL` fails clearly.
 - `python -m converter ocr ...` creates valid `ocr_output` files.
+- `python -m converter ocr --batch-size 1 ...` splits, OCRs, and merges page outputs.
 - `python -m converter build-from-pdf ...` can produce `.bookmd` from a fake OCR client in tests.

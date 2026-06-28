@@ -20,6 +20,18 @@ Set `OCR_API_URL` before using `python -m converter ocr` or `python -m converter
 
 The generic OCR adapter expects a JSON object with a `blocks` array. Each block should include text, page, type, and bbox fields when available. Run the OCR command alone first so you can inspect the generated `result.json` before building `.bookmd`.
 
+## Whole PDF OCR job stays `running`
+
+Use batch mode instead of sending the full PDF as one job:
+
+```bash
+python -m converter ocr --source-pdf path/to/book.pdf --output-dir path/to/ocr_output --batch-size 1
+```
+
+Use `--max-pages 6` for a small smoke test before processing the full book.
+
+On macOS the converter prefers Swift/PDFKit for splitting. If Swift/PDFKit and `pypdf` are both unavailable or cannot split the PDF, pre-split the file with a PDF tool and OCR the smaller files separately.
+
 ## `DEEPSEEK_API_KEY is required`
 
 Use `--translate false` for the default path, use `--provider noop` for local no-op translation tests, or set `DEEPSEEK_API_KEY` before selecting the DeepSeek provider.
