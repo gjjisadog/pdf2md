@@ -153,3 +153,53 @@ def test_ocr_job_client_checks_health_and_downloads_job_files(tmp_path):
     assert json.loads((output_dir / "result.json").read_text(encoding="utf-8"))["metadata"]["title"] == "Job Book"
     assert (output_dir / "source_map.json").exists()
     assert (output_dir / "parse.log").read_text(encoding="utf-8") == "job ok\n"
+
+
+def test_ocr_job_client_polls_queued_jobs_before_downloading(tmp_path):
+    pdf = tmp_path / "source.pdf"
+    pdf.write_bytes(b"%PDF-1.4 queued")
+    output_dir = tmp_path / "ocr_output"
+    status_calls = []
+
+    def fake_submit(_pdf_bytes, _filename, _config):
+        return {
+            "job_id": "job-queued",
+            "status": "queued",
+            "files": {
+                "result_md": "/v1/jobs/job-queued/files/result.md",
+                "result_json": "/v1/jobs/job-queued/files/result.json",
+                "parse_log": "/v1/jobs/job-queued/files/parse.log",
+            },
+        }
+
+    def fake_status(job_id, _config):
+        status_calls.append(job_id)
+        return {
+            "job_id": job_id,
+            "status": "succeeded",
+            "files": {
+                "result_md": "/v1/jobs/job-queued/files/result.md",
+                "result_json": "/v1/jobs/job-queued/files/result.json",
+                "parse_log": "/v1/jobs/job-queued/files/parse.log",
+            },
+        }
+
+    def fake_download(file_url, _config):
+        if file_url.endswith("result.md"):
+            return b"Queued job text\n"
+        if file_url.endswith("result.json"):
+            return b'{"pages":[{"page_index":2,"blocks":[]}]}'
+        return b"queued ok\n"
+
+    client = OcrJobClient(
+        OcrApiConfig(api_url="http://100.64.0.10:8765", api_key="secret"),
+        submit_transport=fake_submit,
+        status_transport=fake_status,
+        download_transport=fake_download,
+        poll_interval_seconds=0,
+    )
+
+    client.parse_to_output(pdf, output_dir)
+
+    assert status_calls == ["job-queued"]
+    assert (output_dir / "result.md").read_text(encoding="utf-8") == "Queued job text\n"

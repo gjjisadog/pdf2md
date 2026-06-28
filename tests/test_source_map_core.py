@@ -25,6 +25,28 @@ def test_normalize_blocks_accepts_pages_shape():
     assert blocks[0].bbox == [1, 2, 3, 4]
 
 
+def test_normalize_blocks_accepts_page_index_from_service_pages():
+    blocks = normalize_blocks(
+        {
+            "pages": [
+                {
+                    "page_index": 2,
+                    "blocks": [
+                        {
+                            "block_id": "p002_b001",
+                            "type": "paragraph",
+                            "bbox": [1, 2, 3, 4],
+                            "text": "Grid inverter",
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+
+    assert blocks[0].page == 2
+
+
 def test_build_source_map_preserves_trace_data():
     blocks = normalize_blocks(
         {

@@ -13,7 +13,12 @@ def normalize_blocks(data: Mapping[str, Any]) -> list[OcrBlock]:
         for page_item in data["pages"]:
             if not isinstance(page_item, Mapping):
                 continue
-            page_number = int(page_item.get("page") or page_item.get("page_number") or 1)
+            page_number = int(
+                page_item.get("page")
+                or page_item.get("page_number")
+                or page_item.get("page_index")
+                or 1
+            )
             for block in page_item.get("blocks") or []:
                 if isinstance(block, Mapping):
                     raw_blocks.append((page_number, block))

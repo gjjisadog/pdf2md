@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -43,6 +44,7 @@ Transport = Callable[[bytes, str, OcrApiConfig], Mapping[str, Any]]
 HealthTransport = Callable[[OcrApiConfig], Mapping[str, Any]]
 JobSubmitTransport = Callable[[bytes, str, OcrApiConfig], Mapping[str, Any]]
 DownloadTransport = Callable[[str, OcrApiConfig], bytes]
+StatusTransport = Callable[[str, OcrApiConfig], Mapping[str, Any]]
 
 
 class OcrHttpClient:
@@ -64,12 +66,18 @@ class OcrJobClient:
         config: OcrApiConfig,
         health_transport: HealthTransport | None = None,
         submit_transport: JobSubmitTransport | None = None,
+        status_transport: StatusTransport | None = None,
         download_transport: DownloadTransport | None = None,
+        poll_interval_seconds: float = 2.0,
+        max_polls: int = 60,
     ):
         self.config = config
         self.health_transport = health_transport or _job_health_transport
         self.submit_transport = submit_transport or _job_submit_transport
+        self.status_transport = status_transport or _job_status_transport
         self.download_transport = download_transport or _job_download_transport
+        self.poll_interval_seconds = poll_interval_seconds
+        self.max_polls = max_polls
 
     def check_health(self) -> dict[str, Any]:
         response = dict(self.health_transport(self.config))
@@ -81,7 +89,7 @@ class OcrJobClient:
         path = os.fspath(source_pdf)
         with open(path, "rb") as handle:
             pdf_bytes = handle.read()
-        job = self.submit_transport(pdf_bytes, os.path.basename(path), self.config)
+        job = self._wait_for_success(self.submit_transport(pdf_bytes, os.path.basename(path), self.config))
         files = _job_files(job)
         target = Path(output_dir)
         target.mkdir(parents=True, exist_ok=True)
@@ -103,6 +111,24 @@ class OcrJobClient:
         if not (target / "parse.log").exists():
             (target / "parse.log").write_text(f"job_id={job.get('job_id', '')}\n", encoding="utf-8")
         return target
+
+    def _wait_for_success(self, job: Mapping[str, Any]) -> Mapping[str, Any]:
+        status = job.get("status")
+        if status == "succeeded":
+            return job
+        job_id = str(job.get("job_id") or "")
+        if not job_id:
+            raise OcrApiError(f"OCR job response missing job_id: {job}")
+        for _ in range(self.max_polls):
+            if status in {"failed", "error", "cancelled"}:
+                raise OcrApiError(f"OCR job did not succeed: {job}")
+            if self.poll_interval_seconds:
+                time.sleep(self.poll_interval_seconds)
+            job = self.status_transport(job_id, self.config)
+            status = job.get("status")
+            if status == "succeeded":
+                return job
+        raise OcrApiError(f"OCR job timed out waiting for success: {job_id}")
 
 
 def _job_files(job: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -171,7 +197,7 @@ def _http_transport(pdf_bytes: bytes, filename: str, config: OcrApiConfig) -> di
         headers=headers,
         method="POST",
     )
-    with request.urlopen(http_request, timeout=config.timeout) as response:
+    with _urlopen(http_request, timeout=config.timeout) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -181,7 +207,7 @@ def _job_health_transport(config: OcrApiConfig) -> dict[str, Any]:
         headers=_auth_headers(config),
         method="GET",
     )
-    with request.urlopen(http_request, timeout=config.timeout) as response:
+    with _urlopen(http_request, timeout=config.timeout) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -198,7 +224,17 @@ def _job_submit_transport(pdf_bytes: bytes, filename: str, config: OcrApiConfig)
         headers=headers,
         method="POST",
     )
-    with request.urlopen(http_request, timeout=config.timeout) as response:
+    with _urlopen(http_request, timeout=config.timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _job_status_transport(job_id: str, config: OcrApiConfig) -> dict[str, Any]:
+    http_request = request.Request(
+        _service_url(config, f"/v1/jobs/{job_id}"),
+        headers=_auth_headers(config),
+        method="GET",
+    )
+    with _urlopen(http_request, timeout=config.timeout) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -208,7 +244,7 @@ def _job_download_transport(file_url: str, config: OcrApiConfig) -> bytes:
         headers=_auth_headers(config),
         method="GET",
     )
-    with request.urlopen(http_request, timeout=config.timeout) as response:
+    with _urlopen(http_request, timeout=config.timeout) as response:
         return response.read()
 
 
@@ -216,6 +252,11 @@ def _auth_headers(config: OcrApiConfig) -> dict[str, str]:
     if not config.api_key:
         return {}
     return {"Authorization": f"Bearer {config.api_key}"}
+
+
+def _urlopen(http_request: request.Request, timeout: int):
+    opener = request.build_opener(request.ProxyHandler({}))
+    return opener.open(http_request, timeout=timeout)
 
 
 def _service_url(config: OcrApiConfig, path: str) -> str:
