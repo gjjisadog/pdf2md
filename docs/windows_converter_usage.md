@@ -49,9 +49,16 @@ The converter does not deploy local OCR models and does not install Paddle-relat
 Generic OCR API environment:
 
 ```bash
-export OCR_API_URL=https://example.local/ocr
+export OCR_API_URL=http://100.x.y.z:8765
 export OCR_API_KEY=your_key
 export OCR_API_TIMEOUT=120
+export OCR_API_DEVICE=gpu
+```
+
+Check the Tailscale OCR service before uploading a file:
+
+```bash
+python -m converter ocr-health
 ```
 
 Run OCR only:

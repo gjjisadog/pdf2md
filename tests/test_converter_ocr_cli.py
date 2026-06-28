@@ -84,3 +84,16 @@ def test_cli_build_from_pdf_runs_ocr_then_builds_bookmd(tmp_path, monkeypatch):
 
     assert manifest["title"] == "OCR CLI Book"
     assert "Grid inverter" in chapter
+
+
+def test_cli_ocr_health_prints_service_status(monkeypatch, capsys):
+    class FakeHealthClient:
+        def check_health(self):
+            return {"status": "ok", "service": "pdf_ocr_deploy"}
+
+    monkeypatch.setattr(ocr_pipeline, "_ocr_client_from_env", lambda: FakeHealthClient())
+
+    exit_code = cli.main(["ocr-health"])
+
+    assert exit_code == 0
+    assert "pdf_ocr_deploy" in capsys.readouterr().out

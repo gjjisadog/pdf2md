@@ -5,8 +5,10 @@ import os
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from urllib import request
+from urllib.parse import urljoin
 
 
 class MissingOcrConfigError(RuntimeError):
@@ -22,6 +24,7 @@ class OcrApiConfig:
     api_url: str
     api_key: str = ""
     timeout: int = 120
+    device: str = "gpu"
 
     @classmethod
     def from_env(cls) -> "OcrApiConfig":
@@ -32,10 +35,14 @@ class OcrApiConfig:
             api_url=api_url,
             api_key=os.getenv("OCR_API_KEY", ""),
             timeout=int(os.getenv("OCR_API_TIMEOUT", "120")),
+            device=os.getenv("OCR_API_DEVICE", "gpu"),
         )
 
 
 Transport = Callable[[bytes, str, OcrApiConfig], Mapping[str, Any]]
+HealthTransport = Callable[[OcrApiConfig], Mapping[str, Any]]
+JobSubmitTransport = Callable[[bytes, str, OcrApiConfig], Mapping[str, Any]]
+DownloadTransport = Callable[[str, OcrApiConfig], bytes]
 
 
 class OcrHttpClient:
@@ -49,6 +56,62 @@ class OcrHttpClient:
             pdf_bytes = handle.read()
         response = self.transport(pdf_bytes, os.path.basename(path), self.config)
         return _normalize_response(response)
+
+
+class OcrJobClient:
+    def __init__(
+        self,
+        config: OcrApiConfig,
+        health_transport: HealthTransport | None = None,
+        submit_transport: JobSubmitTransport | None = None,
+        download_transport: DownloadTransport | None = None,
+    ):
+        self.config = config
+        self.health_transport = health_transport or _job_health_transport
+        self.submit_transport = submit_transport or _job_submit_transport
+        self.download_transport = download_transport or _job_download_transport
+
+    def check_health(self) -> dict[str, Any]:
+        response = dict(self.health_transport(self.config))
+        if response.get("status") != "ok":
+            raise OcrApiError(f"OCR service health check failed: {response}")
+        return response
+
+    def parse_to_output(self, source_pdf: str | os.PathLike[str], output_dir: str | os.PathLike[str]) -> Path:
+        path = os.fspath(source_pdf)
+        with open(path, "rb") as handle:
+            pdf_bytes = handle.read()
+        job = self.submit_transport(pdf_bytes, os.path.basename(path), self.config)
+        files = _job_files(job)
+        target = Path(output_dir)
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "assets").mkdir(exist_ok=True)
+        downloads = {
+            "result_md": "result.md",
+            "result_json": "result.json",
+            "source_map": "source_map.json",
+            "parse_log": "parse.log",
+        }
+        for key, filename in downloads.items():
+            file_url = files.get(key)
+            if not file_url:
+                if key == "source_map":
+                    continue
+                raise OcrApiError(f"OCR job response missing file URL: {key}")
+            content = self.download_transport(str(file_url), self.config)
+            (target / filename).write_bytes(content)
+        if not (target / "parse.log").exists():
+            (target / "parse.log").write_text(f"job_id={job.get('job_id', '')}\n", encoding="utf-8")
+        return target
+
+
+def _job_files(job: Mapping[str, Any]) -> Mapping[str, Any]:
+    if job.get("status") != "succeeded":
+        raise OcrApiError(f"OCR job did not succeed: {job}")
+    files = job.get("files")
+    if not isinstance(files, Mapping):
+        raise OcrApiError("OCR job response must contain files object")
+    return files
 
 
 def _normalize_response(response: Mapping[str, Any]) -> dict[str, Any]:
@@ -112,11 +175,76 @@ def _http_transport(pdf_bytes: bytes, filename: str, config: OcrApiConfig) -> di
         return json.loads(response.read().decode("utf-8"))
 
 
-def _multipart_body(boundary: str, field_name: str, filename: str, payload: bytes) -> bytes:
+def _job_health_transport(config: OcrApiConfig) -> dict[str, Any]:
+    http_request = request.Request(
+        _service_url(config, "/health"),
+        headers=_auth_headers(config),
+        method="GET",
+    )
+    with request.urlopen(http_request, timeout=config.timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _job_submit_transport(pdf_bytes: bytes, filename: str, config: OcrApiConfig) -> dict[str, Any]:
+    boundary = f"----bookmd-ocr-{uuid.uuid4().hex}"
+    body = _multipart_body(boundary, "file", filename, pdf_bytes, fields={"device": config.device})
+    headers = {
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+        **_auth_headers(config),
+    }
+    http_request = request.Request(
+        _service_url(config, "/v1/ocr/parse"),
+        data=body,
+        headers=headers,
+        method="POST",
+    )
+    with request.urlopen(http_request, timeout=config.timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _job_download_transport(file_url: str, config: OcrApiConfig) -> bytes:
+    http_request = request.Request(
+        _service_url(config, file_url),
+        headers=_auth_headers(config),
+        method="GET",
+    )
+    with request.urlopen(http_request, timeout=config.timeout) as response:
+        return response.read()
+
+
+def _auth_headers(config: OcrApiConfig) -> dict[str, str]:
+    if not config.api_key:
+        return {}
+    return {"Authorization": f"Bearer {config.api_key}"}
+
+
+def _service_url(config: OcrApiConfig, path: str) -> str:
+    base_url = config.api_url.rstrip("/") + "/"
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+    return urljoin(base_url, path.lstrip("/"))
+
+
+def _multipart_body(
+    boundary: str,
+    field_name: str,
+    filename: str,
+    payload: bytes,
+    fields: Mapping[str, str] | None = None,
+) -> bytes:
+    parts: list[bytes] = []
+    for key, value in (fields or {}).items():
+        parts.append(
+            (
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="{key}"\r\n\r\n'
+                f"{value}\r\n"
+            ).encode("utf-8")
+        )
     head = (
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'
         "Content-Type: application/pdf\r\n\r\n"
     ).encode("utf-8")
     tail = f"\r\n--{boundary}--\r\n".encode("utf-8")
-    return head + payload + tail
+    return b"".join(parts) + head + payload + tail

@@ -11,7 +11,7 @@ from ocr_client import MissingOcrConfigError, OcrApiError
 
 from .builder import BuildOptions, ConverterError, build_bookmd
 from .config import load_config
-from .ocr_pipeline import OcrOptions, run_ocr
+from .ocr_pipeline import OcrOptions, check_ocr_health, run_ocr
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -30,6 +30,8 @@ def main(argv: list[str] | None = None) -> int:
     ocr_parser = subparsers.add_parser("ocr")
     ocr_parser.add_argument("--source-pdf", required=True)
     ocr_parser.add_argument("--output-dir", required=True)
+
+    subparsers.add_parser("ocr-health")
 
     build_from_pdf_parser = subparsers.add_parser("build-from-pdf")
     build_from_pdf_parser.add_argument("--source-pdf", required=True)
@@ -56,6 +58,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "ocr":
             output_dir = run_ocr(_ocr_options_from_args(args))
             print(f"OCR output written: {output_dir}")
+            return 0
+        if args.command == "ocr-health":
+            print(json.dumps(check_ocr_health(), ensure_ascii=False))
             return 0
         if args.command == "build-from-pdf":
             run_ocr(_ocr_options_from_args(args))

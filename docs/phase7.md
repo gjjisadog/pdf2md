@@ -22,9 +22,19 @@ Configuration comes from environment variables:
 export OCR_API_URL=https://example.local/ocr
 export OCR_API_KEY=...
 export OCR_API_TIMEOUT=120
+export OCR_API_DEVICE=gpu
 ```
 
-The default transport sends `multipart/form-data` with the PDF as `file`.
+The Tailscale/job transport uses:
+
+- `GET /health`
+- `POST /v1/ocr/parse`
+- `GET /v1/jobs/<job_id>/files/result.md`
+- `GET /v1/jobs/<job_id>/files/result.json`
+- `GET /v1/jobs/<job_id>/files/source_map.json`
+- `GET /v1/jobs/<job_id>/files/parse.log`
+
+The upload request sends `multipart/form-data` with the PDF as `file` and `device` as configured by `OCR_API_DEVICE`.
 
 The expected response is JSON:
 
