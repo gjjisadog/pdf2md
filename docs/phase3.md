@@ -38,4 +38,20 @@ BUILD SUCCESSFUL
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-No Android device was attached during this phase, so `adb install` was not executed.
+Emulator verification was also performed with a temporary Android 33 arm64 AVD:
+
+```text
+adb install -r app-debug.apk
+Success
+am start -n com.bookmd.reader/.BookShelfActivity
+topResumedActivity=... com.bookmd.reader/.BookShelfActivity
+```
+
+A sample `.bookmd` was unpacked into app-private storage to simulate an imported book, then the shelf -> TOC -> reader flow was exercised on the emulator:
+
+```text
+topResumedActivity=... com.bookmd.reader/.TocActivity
+topResumedActivity=... com.bookmd.reader/.ReaderActivity
+```
+
+No physical Android device was attached during this phase.

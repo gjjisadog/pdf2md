@@ -34,6 +34,7 @@ def test_sample_ocr_output_builds_bookmd(tmp_path):
 
     assert any(item["block_id"] == "p001_b002" for item in source_map["blocks"])
     assert any("并网逆变器" in item["text"] for item in search_index["items"])
+    assert any(item["chapter_path"] == "chapters/001_chapter_1.md" for item in search_index["items"])
 
 
 def test_sample_bookmd_contains_reader_required_payloads(tmp_path):
