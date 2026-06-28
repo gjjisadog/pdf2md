@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BookMD Reader</title>
+  </head>
+  <body>
+    <main id="bookmd-content" class="bookmd-content"></main>
+    <script>
+      window.BookMDReader = {
+        loadChapter: function (payload) {
+          document.getElementById("bookmd-content").innerHTML = payload.html || "";
+        }
+      };
+    </script>
+  </body>
+</html>

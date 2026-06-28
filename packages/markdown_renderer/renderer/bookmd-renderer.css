@@ -1,0 +1,72 @@
+:root {
+  color-scheme: light;
+  --bookmd-bg: #fbfaf7;
+  --bookmd-text: #24211c;
+  --bookmd-muted: #6f6a60;
+  --bookmd-rule: #d8d1c3;
+  --bookmd-accent: #1f6f78;
+}
+
+body {
+  margin: 0;
+  background: var(--bookmd-bg);
+  color: var(--bookmd-text);
+  font-family: "Noto Serif SC", "Source Han Serif SC", serif;
+}
+
+.bookmd-content {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 22px 20px 40px;
+  font-size: var(--bookmd-font-size, 18px);
+  line-height: var(--bookmd-line-height, 1.75);
+}
+
+.bookmd-content[data-theme="dark"] {
+  color-scheme: dark;
+  --bookmd-bg: #171713;
+  --bookmd-text: #eee8db;
+  --bookmd-muted: #aaa293;
+  --bookmd-rule: #3c3931;
+  --bookmd-accent: #75b8c1;
+}
+
+.bookmd-content[data-layout="paged"] {
+  column-gap: 36px;
+}
+
+.bookmd-block {
+  break-inside: avoid;
+}
+
+.bookmd-figure,
+.bookmd-formula,
+.bookmd-table {
+  margin: 1.25rem 0;
+  padding: 0.75rem 0;
+  border-block: 1px solid var(--bookmd-rule);
+}
+
+.bookmd-figure img,
+.bookmd-formula img,
+.bookmd-table img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.bookmd-table {
+  overflow-x: auto;
+}
+
+.bookmd-caption {
+  margin-top: 0.5rem;
+  color: var(--bookmd-muted);
+  font-size: 0.88em;
+  text-align: center;
+}
+
+a {
+  color: var(--bookmd-accent);
+}

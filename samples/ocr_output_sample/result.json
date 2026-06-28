@@ -1,0 +1,55 @@
+{
+  "pages": [
+    {
+      "page": 1,
+      "blocks": [
+        {
+          "block_id": "p001_b001",
+          "type": "heading",
+          "level": 1,
+          "bbox": [72, 64, 520, 108],
+          "text": "第一章 并网逆变器控制基础"
+        },
+        {
+          "block_id": "p001_b002",
+          "type": "paragraph",
+          "bbox": [72, 128, 520, 188],
+          "text": "并网逆变器通常采用电流内环控制，以提高电流跟踪速度。"
+        },
+        {
+          "block_id": "p001_b003",
+          "type": "paragraph",
+          "bbox": [72, 198, 520, 258],
+          "text": "The current controller is usually designed in the synchronous reference frame."
+        },
+        {
+          "block_id": "eq_001",
+          "type": "formula",
+          "bbox": [96, 282, 480, 336],
+          "latex": "G_i(s)=K_p+\\frac{K_i}{s}",
+          "caption": "公式 1-1 电流环 PI 控制器"
+        },
+        {
+          "block_id": "fig_001",
+          "type": "figure",
+          "bbox": [88, 360, 500, 520],
+          "asset_path": "assets/images/page_001_fig_001.svg",
+          "caption": "图 1-1 并网逆变器控制框图"
+        },
+        {
+          "block_id": "tab_001",
+          "type": "table",
+          "bbox": [80, 540, 510, 660],
+          "asset_path": "assets/tables/page_001_table_001.svg",
+          "caption": "表 1-1 控制参数表"
+        },
+        {
+          "block_id": "cap_001",
+          "type": "caption",
+          "bbox": [88, 668, 500, 696],
+          "text": "图表中的参数仅用于转换样例。"
+        }
+      ]
+    }
+  ]
+}

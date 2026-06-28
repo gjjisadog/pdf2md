@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="180" viewBox="0 0 560 180">
+  <rect width="560" height="180" fill="#ffffff"/>
+  <rect x="20" y="20" width="520" height="140" fill="#f8fafc" stroke="#334155"/>
+  <path d="M20 65 H540 M20 110 H540 M190 20 V160 M365 20 V160" stroke="#334155"/>
+  <text x="105" y="48" text-anchor="middle" font-size="18">参数</text>
+  <text x="277" y="48" text-anchor="middle" font-size="18">含义</text>
+  <text x="452" y="48" text-anchor="middle" font-size="18">样例值</text>
+  <text x="105" y="93" text-anchor="middle" font-size="16">Kp</text>
+  <text x="277" y="93" text-anchor="middle" font-size="16">比例增益</text>
+  <text x="452" y="93" text-anchor="middle" font-size="16">0.5</text>
+  <text x="105" y="138" text-anchor="middle" font-size="16">Ki</text>
+  <text x="277" y="138" text-anchor="middle" font-size="16">积分增益</text>
+  <text x="452" y="138" text-anchor="middle" font-size="16">20</text>
+</svg>
