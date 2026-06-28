@@ -2,9 +2,16 @@ package com.bookmd.reader.web
 
 import android.app.Activity
 import android.webkit.JavascriptInterface
+import com.bookmd.reader.data.SourceMapRepository
 import com.bookmd.reader.ui.SourceMapDialog
+import java.io.File
 
-class BookMdWebBridge(private val activity: Activity) {
+class BookMdWebBridge(
+    private val activity: Activity,
+    bookDir: File,
+) {
+    private val sourceMapRepository = SourceMapRepository(bookDir)
+
     @JavascriptInterface
     fun onBlockSelected(blockId: String) {
         onSourceMapRequested(blockId)
@@ -12,8 +19,17 @@ class BookMdWebBridge(private val activity: Activity) {
 
     @JavascriptInterface
     fun onSourceMapRequested(blockId: String) {
+        val block = sourceMapRepository.findBlock(blockId)
         activity.runOnUiThread {
-            SourceMapDialog.show(activity, blockId, "")
+            SourceMapDialog.show(
+                activity,
+                blockId,
+                if (block == null) {
+                    ""
+                } else {
+                    "Page: ${block.sourcePage}\nType: ${block.type}\nBBox: ${block.bbox}\n\n${block.sourceText}"
+                },
+            )
         }
     }
 

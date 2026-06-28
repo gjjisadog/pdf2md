@@ -28,6 +28,12 @@ python -m converter validate samples/bookmd_sample/sample.bookmd
 - renderer 支持 Markdown/custom block、搜索高亮、block 跳转和 WebView 回调。
 - Android 工程包含导入、书架、目录、阅读、搜索、进度和 source map 弹窗边界。
 
+第三阶段继续推进到 Android 可构建阅读 MVP：
+
+- Android 工程带 Gradle wrapper。
+- `assembleDebug` 已验证通过。
+- App 具备导入 `.bookmd`、书架、目录、阅读、搜索跳转、source map 弹窗主链路代码。
+
 ## 目录
 
 - `apps/converter_desktop/`: Windows/desktop 转换器 CLI。

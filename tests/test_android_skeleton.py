@@ -88,3 +88,47 @@ def test_android_source_map_repository_can_find_block():
     assert "findBlock" in source_map
     assert "block_id" in source_map
     assert "source_text" in source_map
+
+
+def test_android_import_shelf_toc_reader_flow_is_wired():
+    root = Path("apps/reader-android/app/src/main/java/com/bookmd/reader")
+    importer = (root / "BookImportActivity.kt").read_text(encoding="utf-8")
+    shelf = (root / "BookShelfActivity.kt").read_text(encoding="utf-8")
+    toc = (root / "TocActivity.kt").read_text(encoding="utf-8")
+    reader = (root / "ReaderActivity.kt").read_text(encoding="utf-8")
+
+    assert "Intent.ACTION_OPEN_DOCUMENT" in importer
+    assert "onActivityResult" in importer
+    assert "importBook" in importer
+    assert "listBooks" in shelf
+    assert "TocActivity" in shelf
+    assert "readManifest" in toc
+    assert "ReaderActivity" in toc
+    assert "loadChapter" in reader
+    assert "readChapterMarkdown" in reader
+    assert "jumpToBlock" in reader
+
+
+def test_android_search_flow_jumps_to_reader_block():
+    root = Path("apps/reader-android/app/src/main/java/com/bookmd/reader")
+    search = (root / "SearchActivity.kt").read_text(encoding="utf-8")
+    repository = (root / "data/SearchRepository.kt").read_text(encoding="utf-8")
+
+    assert "SearchRepository" in search
+    assert "ReaderActivity" in search
+    assert "target_block_id" in search
+    assert "search_index.json" in repository
+    assert "chapter_path" in repository
+
+
+def test_android_source_map_dialog_shows_page_bbox_and_text():
+    root = Path("apps/reader-android/app/src/main/java/com/bookmd/reader")
+    source_map = (root / "data/SourceMapRepository.kt").read_text(encoding="utf-8")
+    bridge = (root / "web/BookMdWebBridge.kt").read_text(encoding="utf-8")
+
+    assert "bbox" in source_map
+    assert "sourcePage" in source_map
+    assert "sourceText" in source_map
+    assert "findBlock" in bridge
+    assert "sourcePage" in bridge
+    assert "bbox" in bridge

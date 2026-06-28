@@ -20,3 +20,20 @@ It currently provides:
 The repository test suite verifies the Android project structure and reader boundaries. APK compilation should be verified in Android Studio or a machine with Gradle/Android SDK tooling available.
 
 Full file picker, true pagination, and polished reading controls are next-stage work.
+
+## Build
+
+The project includes a Gradle wrapper:
+
+```bash
+cd apps/reader-android
+ANDROID_HOME=/path/to/android-sdk ANDROID_SDK_ROOT=/path/to/android-sdk ./gradlew assembleDebug
+```
+
+The debug APK is written to:
+
+```text
+apps/reader-android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Phase 3 verified `assembleDebug` successfully with Android SDK 33. A connected device is required for `adb install`.

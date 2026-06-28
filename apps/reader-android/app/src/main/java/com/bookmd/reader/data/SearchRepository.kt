@@ -6,6 +6,7 @@ import org.json.JSONObject
 data class SearchResult(
     val blockId: String,
     val chapterId: String,
+    val chapterPath: String,
     val chapterTitle: String,
     val text: String,
 )
@@ -26,6 +27,7 @@ class SearchRepository(private val bookDir: File) {
                     SearchResult(
                         blockId = item.optString("block_id"),
                         chapterId = item.optString("chapter_id"),
+                        chapterPath = item.optString("chapter_path"),
                         chapterTitle = item.optString("chapter_title"),
                         text = text,
                     )

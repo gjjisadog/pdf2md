@@ -5,6 +5,13 @@ import java.util.zip.ZipFile
 import org.json.JSONObject
 
 class BookRepository(private val rootDir: File) {
+    fun listBooks(): List<File> {
+        return rootDir.listFiles()
+            ?.filter { File(it, "book.json").exists() }
+            ?.sortedBy { it.name.lowercase() }
+            ?: emptyList()
+    }
+
     fun importBook(bookmd: File): File {
         val target = File(rootDir, bookmd.nameWithoutExtension)
         target.mkdirs()
@@ -51,5 +58,9 @@ class BookRepository(private val rootDir: File) {
 
     fun readChapterMarkdown(bookDir: File, chapter: BookChapter): String {
         return File(bookDir, chapter.path).readText()
+    }
+
+    fun readChapterMarkdown(bookDir: File, chapterPath: String): String {
+        return File(bookDir, chapterPath).readText()
     }
 }

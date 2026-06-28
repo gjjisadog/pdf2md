@@ -6,6 +6,7 @@ import org.json.JSONObject
 data class SourceMapBlock(
     val blockId: String,
     val sourcePage: Int,
+    val bbox: String,
     val sourceText: String,
     val type: String,
 )
@@ -24,6 +25,7 @@ class SourceMapRepository(private val bookDir: File) {
                 return SourceMapBlock(
                     blockId = item.optString("block_id"),
                     sourcePage = item.optInt("source_page"),
+                    bbox = item.optJSONArray("bbox")?.toString() ?: "[]",
                     sourceText = item.optString("source_text"),
                     type = item.optString("type"),
                 )

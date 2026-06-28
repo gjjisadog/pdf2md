@@ -207,6 +207,7 @@ def _search_index(
             {
                 "block_id": block.block_id,
                 "chapter_id": chapter_id,
+                "chapter_path": chapter_by_block.get(block.block_id, ("", ""))[1],
                 "chapter_title": title_by_id.get(chapter_id, ""),
                 "type": block.type,
                 "text": text,
