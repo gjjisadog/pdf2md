@@ -40,7 +40,7 @@ class ReaderActivity : Activity() {
     }
 
     private fun loadChapter() {
-        val markdown = repository.readChapterMarkdown(bookDir, chapterPath)
+        val markdown = rewriteAssetPaths(repository.readChapterMarkdown(bookDir, chapterPath))
         val payload = JSONObject()
             .put("markdown", markdown)
             .put(
@@ -58,5 +58,10 @@ class ReaderActivity : Activity() {
                 null,
             )
         }
+    }
+
+    private fun rewriteAssetPaths(markdown: String): String {
+        val assetBase = "file://${bookDir.absolutePath}/assets/"
+        return markdown.replace("../assets/", assetBase)
     }
 }

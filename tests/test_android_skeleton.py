@@ -106,6 +106,7 @@ def test_android_import_shelf_toc_reader_flow_is_wired():
     assert "ReaderActivity" in toc
     assert "loadChapter" in reader
     assert "readChapterMarkdown" in reader
+    assert "rewriteAssetPaths" in reader
     assert "jumpToBlock" in reader
 
 

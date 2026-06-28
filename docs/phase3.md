@@ -54,4 +54,6 @@ topResumedActivity=... com.bookmd.reader/.TocActivity
 topResumedActivity=... com.bookmd.reader/.ReaderActivity
 ```
 
+The updated reader APK was also checked on the emulator for search result navigation, source-map dialog display, and private-file asset loading. Figure and table assets render from the imported `.bookmd` directory instead of showing broken WebView image placeholders.
+
 No physical Android device was attached during this phase.
