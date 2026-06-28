@@ -34,6 +34,12 @@ python -m converter validate samples/bookmd_sample/sample.bookmd
 - `assembleDebug` 已验证通过。
 - App 具备导入 `.bookmd`、书架、目录、阅读、搜索跳转、source map 弹窗主链路代码。
 
+第四阶段继续强化 renderer 与阅读体验：
+
+- Android WebView 使用 `packages/markdown_renderer/renderer` 同源资产。
+- renderer 支持代码块、Markdown 表格、脚注、引用链接、锚点和语言模式。
+- Android 增加设置页、图片/表格全屏查看和章节阅读进度保存/恢复。
+
 ## 目录
 
 - `apps/converter_desktop/`: Windows/desktop 转换器 CLI。

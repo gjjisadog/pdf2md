@@ -15,11 +15,20 @@ It currently provides:
 - `BookMdWebBridge` for block/image callbacks from WebView.
 - `SourceMapDialog` for first-pass source text display.
 - `ReaderSettings` for font size, line height, theme, layout, and language mode defaults.
-- Renderer asset placeholder loaded through `file:///android_asset/bookmd-renderer.html`.
+- Renderer assets loaded through `file:///android_asset/bookmd-renderer.html`.
+- `SettingsActivity` for font size, line height, theme, layout, and language mode.
+- `ImageViewerActivity` for full-screen figure/table asset viewing.
 
-The repository test suite verifies the Android project structure and reader boundaries. APK compilation should be verified in Android Studio or a machine with Gradle/Android SDK tooling available.
+The Android renderer assets are copied from `packages/markdown_renderer/renderer`.
+After changing renderer HTML/CSS/JS, sync Android assets with:
 
-Full file picker, true pagination, and polished reading controls are next-stage work.
+```bash
+python scripts/sync_android_renderer_assets.py
+```
+
+The repository test suite verifies the Android project structure, renderer parity, and reader boundaries. APK compilation should be verified with Gradle/Android SDK tooling.
+
+True native pagination and PDF bbox screenshot tracing remain future work.
 
 ## Build
 
@@ -36,4 +45,13 @@ The debug APK is written to:
 apps/reader-android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Phase 3 verified `assembleDebug` successfully with Android SDK 33. A connected device is required for `adb install`.
+Phase 4 verified `assembleDebug` successfully with Android SDK 33. A connected device or emulator is required for `adb install`.
+
+## Emulator Smoke Test
+
+```bash
+adb install -r apps/reader-android/app/build/outputs/apk/debug/app-debug.apk
+adb shell am start -n com.bookmd.reader/.BookShelfActivity
+```
+
+For local smoke testing, a sample `.bookmd` can be imported through the file picker or unpacked into app-private storage. Verify shelf -> TOC -> reader, search jump, source-map dialog, settings, progress restore, and image/table viewer.

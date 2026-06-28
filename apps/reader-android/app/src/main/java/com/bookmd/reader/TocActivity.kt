@@ -34,6 +34,12 @@ class TocActivity : Activity() {
                         })
                     }
                 })
+                addView(Button(this@TocActivity).apply {
+                    text = "Settings"
+                    setOnClickListener {
+                        startActivity(Intent(this@TocActivity, SettingsActivity::class.java))
+                    }
+                })
                 manifest.chapters.forEach { chapter ->
                     addView(TextView(this@TocActivity).apply {
                         text = chapter.title

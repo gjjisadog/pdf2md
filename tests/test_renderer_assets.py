@@ -43,3 +43,30 @@ def test_renderer_assets_include_reader_interaction_hooks():
     assert "onImageSelected" in js
     assert ".bookmd-search-hit" in css
     assert ".bookmd-source-mark" in css
+
+
+def test_android_renderer_assets_match_package_renderer():
+    package = Path("packages/markdown_renderer/renderer")
+    android = Path("apps/reader-android/app/src/main/assets")
+
+    for name in ["bookmd-renderer.html", "bookmd-renderer.css", "bookmd-renderer.js"]:
+        assert (android / name).read_text(encoding="utf-8") == (
+            package / name
+        ).read_text(encoding="utf-8")
+
+
+def test_renderer_supports_phase_four_markdown_features():
+    root = Path("packages/markdown_renderer/renderer")
+    js = (root / "bookmd-renderer.js").read_text(encoding="utf-8")
+    css = (root / "bookmd-renderer.css").read_text(encoding="utf-8")
+
+    assert "renderMarkdownTable" in js
+    assert "renderCodeFence" in js
+    assert "renderFootnote" in js
+    assert "renderReferenceLink" in js
+    assert "data-language-mode" in js
+    assert "currentProgress" in js
+    assert "restoreProgress" in js
+    assert ".bookmd-code" in css
+    assert ".bookmd-footnote" in css
+    assert ".bookmd-table-scroll" in css

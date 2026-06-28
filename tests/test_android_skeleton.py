@@ -43,15 +43,17 @@ def test_android_repository_models_manifest_and_chapters():
 
 
 def test_android_asset_uses_bookmd_renderer_markdown_api():
-    asset = Path(
-        "apps/reader-android/app/src/main/assets/bookmd-renderer.html"
-    ).read_text(encoding="utf-8")
+    root = Path("apps/reader-android/app/src/main/assets")
+    html = (root / "bookmd-renderer.html").read_text(encoding="utf-8")
+    js = (root / "bookmd-renderer.js").read_text(encoding="utf-8")
 
-    assert "window.BookMDReader" in asset
-    assert "renderMarkdown" in asset
-    assert "loadChapter" in asset
-    assert "jumpToBlock" in asset
-    assert "searchInChapter" in asset
+    assert "bookmd-renderer.css" in html
+    assert "bookmd-renderer.js" in html
+    assert "window.BookMDReader" in js
+    assert "renderMarkdown" in js
+    assert "loadChapter" in js
+    assert "jumpToBlock" in js
+    assert "searchInChapter" in js
 
 
 def test_android_reader_has_phase_two_local_reading_boundaries():
@@ -133,3 +135,52 @@ def test_android_source_map_dialog_shows_page_bbox_and_text():
     assert "findBlock" in bridge
     assert "sourcePage" in bridge
     assert "bbox" in bridge
+
+
+def test_android_reader_has_settings_screen_and_modes():
+    root = Path("apps/reader-android/app/src/main/java/com/bookmd/reader")
+    manifest = Path("apps/reader-android/app/src/main/AndroidManifest.xml").read_text(
+        encoding="utf-8"
+    )
+    settings = (root / "settings/ReaderSettings.kt").read_text(encoding="utf-8")
+    reader = (root / "ReaderActivity.kt").read_text(encoding="utf-8")
+
+    assert "SettingsActivity" in manifest
+    assert (root / "SettingsActivity.kt").exists()
+    assert "fontSize" in settings
+    assert "lineHeight" in settings
+    assert "theme" in settings
+    assert "layout" in settings
+    assert "languageMode" in settings
+    assert "reading_config.json" in reader
+
+
+def test_android_reader_has_image_viewer_for_media_taps():
+    root = Path("apps/reader-android/app/src/main/java/com/bookmd/reader")
+    manifest = Path("apps/reader-android/app/src/main/AndroidManifest.xml").read_text(
+        encoding="utf-8"
+    )
+    bridge = (root / "web/BookMdWebBridge.kt").read_text(encoding="utf-8")
+    viewer = (root / "ImageViewerActivity.kt").read_text(encoding="utf-8")
+
+    assert "ImageViewerActivity" in manifest
+    assert (root / "ImageViewerActivity.kt").exists()
+    assert "onImageSelected" in bridge
+    assert "EXTRA_MEDIA_URI" in bridge or "media_uri" in bridge
+    assert "WebView" in viewer
+    assert "loadDataWithBaseURL" in viewer
+
+
+def test_android_reader_persists_reading_progress():
+    root = Path("apps/reader-android/app/src/main/java/com/bookmd/reader")
+    progress = (root / "data/ReadingProgressStore.kt").read_text(encoding="utf-8")
+    reader = (root / "ReaderActivity.kt").read_text(encoding="utf-8")
+    js = Path(
+        "packages/markdown_renderer/renderer/bookmd-renderer.js"
+    ).read_text(encoding="utf-8")
+
+    assert "saveProgress" in progress
+    assert "readProgress" in progress
+    assert "currentProgress" in js
+    assert "restoreProgress" in js
+    assert "ReadingProgressStore" in reader

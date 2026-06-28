@@ -3,6 +3,8 @@
         android:allowBackup="true"
         android:label="BookMD Reader"
         android:theme="@style/AppTheme">
+        <activity android:name=".ImageViewerActivity" />
+        <activity android:name=".SettingsActivity" />
         <activity android:name=".SearchActivity" />
         <activity android:name=".ReaderActivity" />
         <activity android:name=".TocActivity" />

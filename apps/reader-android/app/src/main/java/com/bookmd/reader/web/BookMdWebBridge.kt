@@ -1,7 +1,10 @@
 package com.bookmd.reader.web
 
 import android.app.Activity
+import android.content.Intent
 import android.webkit.JavascriptInterface
+import com.bookmd.reader.EXTRA_MEDIA_URI
+import com.bookmd.reader.ImageViewerActivity
 import com.bookmd.reader.data.SourceMapRepository
 import com.bookmd.reader.ui.SourceMapDialog
 import java.io.File
@@ -36,7 +39,10 @@ class BookMdWebBridge(
     @JavascriptInterface
     fun onImageSelected(src: String?) {
         activity.runOnUiThread {
-            SourceMapDialog.show(activity, "image", src ?: "")
+            activity.startActivity(Intent(activity, ImageViewerActivity::class.java).apply {
+                putExtra(EXTRA_MEDIA_URI, src ?: "")
+                putExtra("media_uri", src ?: "")
+            })
         }
     }
 }
