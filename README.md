@@ -19,6 +19,15 @@ python -m converter build --source-pdf samples/ocr_output_sample/original.pdf --
 python -m converter validate samples/bookmd_sample/sample.bookmd
 ```
 
+## 当前阶段
+
+第二阶段已经把第一阶段骨架推进到本地阅读闭环雏形：
+
+- 转换器支持 `--config config.yaml`。
+- `.bookmd` 包含章节、assets、source map、搜索索引和阅读配置。
+- renderer 支持 Markdown/custom block、搜索高亮、block 跳转和 WebView 回调。
+- Android 工程包含导入、书架、目录、阅读、搜索、进度和 source map 弹窗边界。
+
 ## 目录
 
 - `apps/converter_desktop/`: Windows/desktop 转换器 CLI。

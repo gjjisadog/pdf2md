@@ -7,6 +7,7 @@ from bookmd_core import validate_bookmd
 from translator_core import MissingApiKeyError
 
 from .builder import BuildOptions, ConverterError, build_bookmd
+from .config import load_config
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -20,6 +21,7 @@ def main(argv: list[str] | None = None) -> int:
     build_parser.add_argument("--translate", default="false")
     build_parser.add_argument("--target-lang", default="zh")
     build_parser.add_argument("--provider", default="noop")
+    build_parser.add_argument("--config")
 
     validate_parser = subparsers.add_parser("validate")
     validate_parser.add_argument("bookmd")
@@ -29,14 +31,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "build":
             output = build_bookmd(
-                BuildOptions(
-                    source_pdf=Path(args.source_pdf),
-                    ocr_output=Path(args.ocr_output),
-                    output=Path(args.output),
-                    translate=_parse_bool(args.translate),
-                    target_lang=args.target_lang,
-                    provider=args.provider,
-                )
+                _build_options_from_args(args)
             )
             print(f"BookMD written: {output}")
             return 0
@@ -48,11 +43,29 @@ def main(argv: list[str] | None = None) -> int:
             for error in result.errors:
                 print(f"ERROR: {error}")
             return 1
-    except (ConverterError, MissingApiKeyError) as exc:
+    except (ConverterError, MissingApiKeyError, FileNotFoundError) as exc:
         print(f"ERROR: {exc}")
         return 1
 
     return 1
+
+
+def _build_options_from_args(args: argparse.Namespace) -> BuildOptions:
+    config = load_config(args.config)
+    target_lang = args.target_lang
+    translation = config.get("translation")
+    if isinstance(translation, dict):
+        target_lang = str(translation.get("default_target_lang", target_lang))
+
+    return BuildOptions(
+        source_pdf=Path(args.source_pdf),
+        ocr_output=Path(args.ocr_output),
+        output=Path(args.output),
+        translate=_parse_bool(args.translate),
+        target_lang=target_lang,
+        provider=args.provider,
+        config=config,
+    )
 
 
 def _parse_bool(value: str) -> bool:

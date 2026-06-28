@@ -1,7 +1,7 @@
 import json
 import zipfile
 
-from bookmd_core import REQUIRED_FILES, read_book_manifest, validate_bookmd
+from bookmd_core import REQUIRED_FILES, package_directory, read_book_manifest, validate_bookmd
 
 
 def test_validate_bookmd_accepts_required_files(tmp_path):
@@ -64,3 +64,18 @@ def test_validate_bookmd_requires_manifest_chapter_files(tmp_path):
 
     assert result.valid is False
     assert any("chapters/missing.md" in error for error in result.errors)
+
+
+def test_package_directory_is_reproducible(tmp_path):
+    source = tmp_path / "book"
+    source.mkdir()
+    (source / "book.json").write_text('{"chapters":[]}', encoding="utf-8")
+    (source / "source_map.json").write_text("{}", encoding="utf-8")
+
+    first = tmp_path / "first.bookmd"
+    second = tmp_path / "second.bookmd"
+
+    package_directory(source, first)
+    package_directory(source, second)
+
+    assert first.read_bytes() == second.read_bytes()

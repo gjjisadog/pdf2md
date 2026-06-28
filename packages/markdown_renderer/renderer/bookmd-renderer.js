@@ -64,7 +64,7 @@
           }
         }
         index += 1;
-        html.push(`<section class="bookmd-block bookmd-bilingual" data-block-id="${escapeHtml(trace || "")}"><div>${escapeHtml(target.join("\n"))}</div><div class="bookmd-bilingual-source">${escapeHtml(source.join("\n"))}</div></section>`);
+        html.push(`<section class="bookmd-block bookmd-source-mark bookmd-bilingual" data-block-id="${escapeHtml(trace || "")}"><div>${escapeHtml(target.join("\n"))}</div><div class="bookmd-bilingual-source">${escapeHtml(source.join("\n"))}</div></section>`);
         trace = null;
         continue;
       }
@@ -74,9 +74,9 @@
       }
       const heading = line.match(/^(#{1,6})\s+(.+)$/);
       if (heading) {
-        html.push(`<h${heading[1].length} class="bookmd-block" data-block-id="${escapeHtml(trace || "")}">${escapeHtml(heading[2])}</h${heading[1].length}>`);
+        html.push(`<h${heading[1].length} class="bookmd-block bookmd-source-mark" data-block-id="${escapeHtml(trace || "")}">${escapeHtml(heading[2])}</h${heading[1].length}>`);
       } else {
-        html.push(`<p class="bookmd-block" data-block-id="${escapeHtml(trace || "")}">${escapeHtml(line)}</p>`);
+        html.push(`<p class="bookmd-block bookmd-source-mark" data-block-id="${escapeHtml(trace || "")}">${escapeHtml(line)}</p>`);
       }
       trace = null;
     }
@@ -86,7 +86,7 @@
   function renderAssetBlock(kind, id, src, caption) {
     const className = `bookmd-${kind}`;
     const media = src ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(caption)}">` : "";
-    return `<figure class="bookmd-block ${className}" data-block-id="${escapeHtml(id)}">${media}<figcaption class="bookmd-caption">${escapeHtml(caption)}</figcaption></figure>`;
+    return `<figure class="bookmd-block bookmd-source-mark ${className}" data-block-id="${escapeHtml(id)}">${media}<figcaption class="bookmd-caption">${escapeHtml(caption)}</figcaption></figure>`;
   }
 
   function readAttribute(text, name) {
@@ -106,7 +106,9 @@
     root.querySelectorAll("[data-block-id]").forEach((node) => {
       node.addEventListener("click", () => {
         const block_id = node.dataset.blockId;
-        if (window.AndroidBookMD && block_id) {
+        if (window.AndroidBookMD && block_id && window.AndroidBookMD.onSourceMapRequested) {
+          window.AndroidBookMD.onSourceMapRequested(block_id);
+        } else if (window.AndroidBookMD && block_id) {
           window.AndroidBookMD.onBlockSelected(block_id);
         }
       });
@@ -121,9 +123,62 @@
     });
   }
 
+  function jumpToBlock(blockId) {
+    const selector = `[data-block-id="${cssEscape(blockId)}"]`;
+    const node = document.querySelector(selector);
+    if (!node) return false;
+    node.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+    node.classList.add("bookmd-current-block");
+    return true;
+  }
+
+  function searchInChapter(query) {
+    clearSearchHighlights();
+    if (!query) return [];
+    const results = [];
+    document.querySelectorAll(".bookmd-block").forEach((node) => {
+      const text = node.textContent || "";
+      const index = text.toLowerCase().indexOf(query.toLowerCase());
+      if (index < 0) return;
+      const blockId = node.dataset.blockId || "";
+      results.push({ block_id: blockId, text });
+      node.innerHTML = highlightText(text, query);
+    });
+    return results;
+  }
+
+  function clearSearchHighlights() {
+    document.querySelectorAll(".bookmd-search-hit").forEach((node) => {
+      const parent = node.parentElement;
+      if (!parent) return;
+      parent.replaceChildren(document.createTextNode(parent.textContent || ""));
+    });
+  }
+
+  function highlightText(text, query) {
+    const escapedText = escapeHtml(text);
+    const escapedQuery = escapeHtml(query);
+    return escapedText.replace(
+      new RegExp(escapeRegExp(escapedQuery), "gi"),
+      (match) => `<mark class="bookmd-search-hit">${match}</mark>`,
+    );
+  }
+
+  function cssEscape(value) {
+    if (window.CSS && window.CSS.escape) return window.CSS.escape(value);
+    return String(value).replaceAll('"', '\\"');
+  }
+
+  function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
   window.BookMDReader = {
     loadChapter,
     applyConfig,
     renderMarkdown,
+    jumpToBlock,
+    searchInChapter,
+    clearSearchHighlights,
   };
 })();

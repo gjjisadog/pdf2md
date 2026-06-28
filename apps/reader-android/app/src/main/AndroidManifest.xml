@@ -3,8 +3,10 @@
         android:allowBackup="true"
         android:label="BookMD Reader"
         android:theme="@style/AppTheme">
+        <activity android:name=".SearchActivity" />
         <activity android:name=".ReaderActivity" />
         <activity android:name=".TocActivity" />
+        <activity android:name=".BookImportActivity" />
         <activity
             android:name=".BookShelfActivity"
             android:exported="true">

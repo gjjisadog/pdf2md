@@ -9,6 +9,11 @@ It currently provides:
 - `BookRepository` for unzipping `.bookmd` into app-private files.
 - `SourceMapRepository` for reading `source_map.json`.
 - `BookShelfActivity`, `TocActivity`, and `ReaderActivity` boundaries.
+- `BookImportActivity` and `SearchActivity` boundaries.
+- `SearchRepository` for local `search_index.json` queries.
+- `ReadingProgressStore` for local reading progress.
+- `BookMdWebBridge` for block/image callbacks from WebView.
+- `SourceMapDialog` for first-pass source text display.
 - `ReaderSettings` for font size, line height, theme, layout, and language mode defaults.
 - Renderer asset placeholder loaded through `file:///android_asset/bookmd-renderer.html`.
 

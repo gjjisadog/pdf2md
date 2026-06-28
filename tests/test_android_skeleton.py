@@ -50,3 +50,41 @@ def test_android_asset_uses_bookmd_renderer_markdown_api():
     assert "window.BookMDReader" in asset
     assert "renderMarkdown" in asset
     assert "loadChapter" in asset
+    assert "jumpToBlock" in asset
+    assert "searchInChapter" in asset
+
+
+def test_android_reader_has_phase_two_local_reading_boundaries():
+    root = Path("apps/reader-android/app/src/main/java/com/bookmd/reader")
+    manifest = Path("apps/reader-android/app/src/main/AndroidManifest.xml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "BookImportActivity" in manifest
+    assert (root / "BookImportActivity.kt").exists()
+    assert (root / "SearchActivity.kt").exists()
+    assert (root / "data/SearchRepository.kt").exists()
+    assert (root / "data/ReadingProgressStore.kt").exists()
+    assert (root / "ui/SourceMapDialog.kt").exists()
+
+
+def test_android_reader_wires_webview_bridge_for_source_and_images():
+    root = Path("apps/reader-android/app/src/main/java/com/bookmd/reader")
+    reader = (root / "ReaderActivity.kt").read_text(encoding="utf-8")
+    bridge = (root / "web/BookMdWebBridge.kt").read_text(encoding="utf-8")
+
+    assert "addJavascriptInterface" in reader
+    assert "AndroidBookMD" in reader
+    assert "onBlockSelected" in bridge
+    assert "onImageSelected" in bridge
+    assert "SourceMapDialog" in bridge
+
+
+def test_android_source_map_repository_can_find_block():
+    source_map = Path(
+        "apps/reader-android/app/src/main/java/com/bookmd/reader/data/SourceMapRepository.kt"
+    ).read_text(encoding="utf-8")
+
+    assert "findBlock" in source_map
+    assert "block_id" in source_map
+    assert "source_text" in source_map

@@ -101,6 +101,36 @@
           });
         }
 
+        function jumpToBlock(blockId) {
+          const node = document.querySelector(`[data-block-id="${blockId}"]`);
+          if (!node) return false;
+          node.scrollIntoView({ block: "center", behavior: "smooth" });
+          return true;
+        }
+
+        function searchInChapter(query) {
+          clearSearchHighlights();
+          if (!query) return [];
+          const results = [];
+          document.querySelectorAll("[data-block-id]").forEach((node) => {
+            const text = node.textContent || "";
+            if (!text.toLowerCase().includes(query.toLowerCase())) return;
+            results.push({ block_id: node.dataset.blockId || "", text: text });
+            node.innerHTML = escapeHtml(text).replace(
+              new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"),
+              (match) => `<mark class="bookmd-search-hit">${match}</mark>`
+            );
+          });
+          return results;
+        }
+
+        function clearSearchHighlights() {
+          document.querySelectorAll(".bookmd-search-hit").forEach((node) => {
+            const parent = node.parentElement;
+            if (parent) parent.textContent = parent.textContent || "";
+          });
+        }
+
         function readAttribute(text, name) {
           const match = text.match(new RegExp(`${name}="([^"]*)"`));
           return match ? match[1] : "";
@@ -114,7 +144,7 @@
             .replaceAll('"', "&quot;");
         }
 
-        window.BookMDReader = { loadChapter, renderMarkdown };
+        window.BookMDReader = { loadChapter, renderMarkdown, jumpToBlock, searchInChapter, clearSearchHighlights };
       })();
     </script>
   </body>

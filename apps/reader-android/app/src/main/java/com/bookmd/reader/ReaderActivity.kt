@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.bookmd.reader.settings.ReaderSettings
+import com.bookmd.reader.web.BookMdWebBridge
 
 class ReaderActivity : Activity() {
     private lateinit var webView: WebView
@@ -18,6 +19,7 @@ class ReaderActivity : Activity() {
         webView.webViewClient = WebViewClient()
         webView.settings.javaScriptEnabled = true
         webView.settings.allowFileAccess = true
+        webView.addJavascriptInterface(BookMdWebBridge(this), "AndroidBookMD")
         setContentView(webView)
         webView.loadUrl("file:///android_asset/bookmd-renderer.html")
     }

@@ -29,6 +29,7 @@ class BuildOptions:
     translate: bool = False
     target_lang: str = "zh"
     provider: str = "noop"
+    config: dict[str, Any] | None = None
 
 
 def build_bookmd(options: BuildOptions) -> Path:
@@ -49,7 +50,7 @@ def build_bookmd(options: BuildOptions) -> Path:
 
     with tempfile.TemporaryDirectory(prefix="bookmd-build-") as temp_name:
         staging = Path(temp_name)
-        _write_book_directory(staging, options, blocks, chapters)
+        _write_book_directory(staging, options, data, blocks, chapters)
         package_directory(staging, options.output)
 
     validation = validate_bookmd(options.output)
@@ -104,6 +105,7 @@ def _apply_translation(blocks: list[OcrBlock], options: BuildOptions) -> list[Oc
 def _write_book_directory(
     staging: Path,
     options: BuildOptions,
+    ocr_data: dict[str, Any],
     blocks: list[OcrBlock],
     chapters: list[Chapter],
 ) -> None:
@@ -114,7 +116,8 @@ def _write_book_directory(
     assets_source = options.ocr_output / "assets"
     if assets_source.exists():
         shutil.copytree(assets_source, staging / "assets", dirs_exist_ok=True)
-    shutil.copy2(options.source_pdf, staging / "source" / "original.pdf")
+    if _config_value(options, "output", "save_original_pdf", True):
+        shutil.copy2(options.source_pdf, staging / "source" / "original.pdf")
 
     chapter_by_block: dict[str, tuple[str, str]] = {}
     for chapter in chapters:
@@ -125,23 +128,31 @@ def _write_book_directory(
         for block in chapter.blocks:
             chapter_by_block[block.block_id] = (chapter.chapter_id, chapter.path)
 
-    _write_json(staging / "book.json", _book_manifest(options, chapters))
+    _write_json(staging / "book.json", _book_manifest(options, ocr_data, chapters))
     _write_json(staging / "source_map.json", build_source_map(blocks, chapter_by_block))
     _write_json(staging / "terms.json", {"terms": []})
     _write_json(staging / "translation.json", _translation_payload(blocks))
-    _write_json(staging / "reading_config.json", _reading_config())
+    _write_json(staging / "reading_config.json", _reading_config(options))
     _write_json(staging / "search_index.json", _search_index(blocks, chapter_by_block, chapters))
 
 
-def _book_manifest(options: BuildOptions, chapters: list[Chapter]) -> dict[str, Any]:
-    title = chapters[0].title if chapters else "Untitled Book"
+def _book_manifest(
+    options: BuildOptions,
+    ocr_data: dict[str, Any],
+    chapters: list[Chapter],
+) -> dict[str, Any]:
+    metadata = ocr_data.get("metadata") if isinstance(ocr_data.get("metadata"), dict) else {}
+    title = metadata.get("title") or (chapters[0].title if chapters else "Untitled Book")
     return {
         "book_id": str(uuid.uuid5(uuid.NAMESPACE_URL, str(options.source_pdf.resolve()))),
         "title": title or "Untitled Book",
-        "author": "",
+        "author": metadata.get("author") or "",
         "source_pdf": options.source_pdf.name,
-        "language": "zh" if options.target_lang == "zh" else options.target_lang,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "language": _target_lang(options),
+        "created_at": datetime.fromtimestamp(
+            options.source_pdf.stat().st_mtime,
+            tz=timezone.utc,
+        ).isoformat(),
         "version": "0.1",
         "chapters": [
             {
@@ -169,13 +180,13 @@ def _translation_payload(blocks: list[OcrBlock]) -> dict[str, list[dict[str, str
     }
 
 
-def _reading_config() -> dict[str, Any]:
+def _reading_config(options: BuildOptions) -> dict[str, Any]:
     return {
         "default_mode": "zh",
-        "layout": "paged",
-        "font_size": 18,
-        "line_height": 1.75,
-        "theme": "light",
+        "layout": _config_value(options, "reading", "layout", "paged"),
+        "font_size": _config_value(options, "reading", "font_size", 18),
+        "line_height": _config_value(options, "reading", "line_height", 1.75),
+        "theme": _config_value(options, "reading", "theme", "light"),
         "paragraph_indent": True,
     }
 
@@ -209,3 +220,27 @@ def _write_json(path: Path, data: Any) -> None:
         json.dumps(data, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+
+
+def _target_lang(options: BuildOptions) -> str:
+    return str(
+        _config_value(
+            options,
+            "translation",
+            "default_target_lang",
+            options.target_lang,
+        )
+    )
+
+
+def _config_value(
+    options: BuildOptions,
+    section: str,
+    key: str,
+    default: Any,
+) -> Any:
+    config = options.config or {}
+    section_data = config.get(section)
+    if isinstance(section_data, dict) and key in section_data:
+        return section_data[key]
+    return default

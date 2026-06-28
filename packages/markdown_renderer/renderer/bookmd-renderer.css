@@ -85,6 +85,24 @@ body {
   font-size: 0.86em;
 }
 
+.bookmd-source-mark {
+  cursor: pointer;
+  outline: 2px solid transparent;
+  outline-offset: 4px;
+}
+
+.bookmd-source-mark:focus,
+.bookmd-source-mark:hover {
+  outline-color: color-mix(in srgb, var(--bookmd-accent), transparent 55%);
+}
+
+.bookmd-search-hit {
+  background: #fff1a8;
+  color: #24211c;
+  border-radius: 3px;
+  padding-inline: 0.08em;
+}
+
 a {
   color: var(--bookmd-accent);
 }
