@@ -46,6 +46,7 @@ apps/reader-android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 Phase 4 verified `assembleDebug` successfully with Android SDK 33. A connected device or emulator is required for `adb install`.
+Phase 6 release verification runs `assembleDebug` automatically when `ANDROID_HOME` or `ANDROID_SDK_ROOT` is available.
 
 ## Emulator Smoke Test
 

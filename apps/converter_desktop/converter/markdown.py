@@ -5,8 +5,8 @@ import json
 from source_map_core import OcrBlock
 
 
-def render_block_markdown(block: OcrBlock) -> str:
-    body = _render_body(block)
+def render_block_markdown(block: OcrBlock, bilingual: bool = False) -> str:
+    body = _render_body(block, bilingual=bilingual)
     return f"{_trace_comment(block)}\n{body}".rstrip() + "\n"
 
 
@@ -15,11 +15,12 @@ def _trace_comment(block: OcrBlock) -> str:
     return f"<!-- block_id: {block.block_id}; page: {block.page}; bbox: {bbox} -->"
 
 
-def _render_body(block: OcrBlock) -> str:
+def _render_body(block: OcrBlock, bilingual: bool = False) -> str:
     block_type = block.type.lower()
     if block_type == "heading":
         level = min(max(block.level or 1, 1), 6)
-        return f"{'#' * level} {block.text}".rstrip()
+        text = _display_text(block, bilingual)
+        return f"{'#' * level} {text}".rstrip()
     if block_type == "formula":
         if block.latex:
             return f"$$\n{block.latex}\n$$"
@@ -31,9 +32,15 @@ def _render_body(block: OcrBlock) -> str:
             return block.markdown
         return _render_asset_block("table", block)
     if block_type == "footnote":
-        return block.text
+        return _display_text(block, bilingual)
     if block_type == "caption":
-        return block.caption or block.text
+        return block.caption or _display_text(block, bilingual)
+    return _display_text(block, bilingual)
+
+
+def _display_text(block: OcrBlock, bilingual: bool) -> str:
+    if bilingual and block.translated_text and block.translated_text != block.text:
+        return f"{block.translated_text}\n\n原文: {block.text}"
     return block.translated_text or block.text
 
 

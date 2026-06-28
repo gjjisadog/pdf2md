@@ -14,7 +14,15 @@ Check `--source-pdf`. Paths with spaces are supported when quoted.
 
 ## `DEEPSEEK_API_KEY is required`
 
-Use `--translate false` for the MVP default path, or set `DEEPSEEK_API_KEY` before selecting the DeepSeek provider.
+Use `--translate false` for the default path, use `--provider noop` for local no-op translation tests, or set `DEEPSEEK_API_KEY` before selecting the DeepSeek provider.
+
+## DeepSeek returned malformed translation JSON
+
+The converter expects a JSON object with one translated entry per input `block_id`. Re-run with `--provider noop` to isolate packaging issues, or retry DeepSeek with a smaller OCR batch in a future batching workflow.
+
+## Translation cache seems stale
+
+Set a new `translation.cache_path` in config or delete the JSONL cache file. Cache keys include provider, target language, and source text hash.
 
 ## Invalid `.bookmd`
 

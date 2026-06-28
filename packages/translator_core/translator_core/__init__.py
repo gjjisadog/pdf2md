@@ -1,15 +1,21 @@
 """Translation interfaces and provider implementations for BookMD."""
 
-from .cache import translation_cache_key
-from .deepseek import DeepSeekConfig, MissingApiKeyError
+from .cache import CachedTranslation, TranslationCacheStore, translation_cache_key
+from .deepseek import DeepSeekConfig, DeepSeekTranslator, MalformedTranslationError, MissingApiKeyError
 from .models import TranslationBlock, TranslationResult
 from .noop import NoopTranslator
+from .terms import extract_terms
 
 __all__ = [
+    "CachedTranslation",
     "DeepSeekConfig",
+    "DeepSeekTranslator",
+    "MalformedTranslationError",
     "MissingApiKeyError",
     "NoopTranslator",
+    "TranslationCacheStore",
     "TranslationBlock",
     "TranslationResult",
+    "extract_terms",
     "translation_cache_key",
 ]

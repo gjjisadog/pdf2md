@@ -11,7 +11,16 @@ from typing import Any
 
 from bookmd_core import package_directory, validate_bookmd
 from source_map_core import OcrBlock, build_source_map, normalize_blocks
-from translator_core import DeepSeekConfig, NoopTranslator, TranslationBlock
+from translator_core import (
+    DeepSeekConfig,
+    DeepSeekTranslator,
+    NoopTranslator,
+    TranslationBlock,
+    TranslationCacheStore,
+    TranslationResult,
+    extract_terms,
+    translation_cache_key,
+)
 
 from .chapters import Chapter, build_chapters
 from .markdown import render_block_markdown
@@ -34,8 +43,6 @@ class BuildOptions:
 
 def build_bookmd(options: BuildOptions) -> Path:
     _validate_inputs(options)
-    if options.translate and options.provider == "deepseek":
-        DeepSeekConfig.from_env()
 
     try:
         data = json.loads((options.ocr_output / "result.json").read_text(encoding="utf-8"))
@@ -74,16 +81,40 @@ def _apply_translation(blocks: list[OcrBlock], options: BuildOptions) -> list[Oc
     if not options.translate:
         return blocks
 
-    translator = NoopTranslator()
-    translation_blocks = [
-        TranslationBlock(block_id=block.block_id, text=block.text)
-        for block in blocks
-        if block.text
-    ]
-    translated_by_id = {
-        item.block_id: item.translated_text
-        for item in translator.translate_blocks(translation_blocks, options.target_lang)
-    }
+    translator = _translator_for_options(options)
+    target_lang = _target_lang(options)
+    cache_store = _translation_cache_store(options)
+    terms = extract_terms(block.text for block in blocks)
+    pending: list[TranslationBlock] = []
+    source_by_id: dict[str, TranslationBlock] = {}
+    translated_by_id: dict[str, str] = {}
+
+    for block in blocks:
+        if not block.text:
+            continue
+        translation_block = TranslationBlock(block_id=block.block_id, text=block.text)
+        source_by_id[block.block_id] = translation_block
+        cache_key = translation_cache_key(options.provider, target_lang, block.text)
+        cached = cache_store.read(cache_key) if cache_store else None
+        if cached:
+            translated_by_id[block.block_id] = cached.translated_text
+        else:
+            pending.append(translation_block)
+
+    if pending:
+        results = _translate_pending(translator, pending, target_lang, terms)
+        for result in results:
+            translated_by_id[result.block_id] = result.translated_text
+            if cache_store and result.block_id in source_by_id:
+                block = source_by_id[result.block_id]
+                cache_store.write(
+                    key=translation_cache_key(options.provider, target_lang, block.text),
+                    block=block,
+                    translated_text=result.translated_text,
+                    provider=options.provider,
+                    target_lang=target_lang,
+                )
+
     return [
         OcrBlock(
             block_id=block.block_id,
@@ -100,6 +131,26 @@ def _apply_translation(blocks: list[OcrBlock], options: BuildOptions) -> list[Oc
         )
         for block in blocks
     ]
+
+
+def _translator_for_options(options: BuildOptions) -> object:
+    if options.provider == "noop":
+        return NoopTranslator()
+    if options.provider == "deepseek":
+        return DeepSeekTranslator(DeepSeekConfig.from_env())
+    raise ConverterError(f"Unsupported translation provider: {options.provider}")
+
+
+def _translate_pending(
+    translator: object,
+    pending: list[TranslationBlock],
+    target_lang: str,
+    terms: list[dict[str, str]],
+) -> list[TranslationResult]:
+    if isinstance(translator, DeepSeekTranslator):
+        return translator.translate_blocks(pending, target_lang, terms=terms)
+    translate_blocks = getattr(translator, "translate_blocks")
+    return translate_blocks(pending, target_lang)
 
 
 def _write_book_directory(
@@ -120,8 +171,12 @@ def _write_book_directory(
         shutil.copy2(options.source_pdf, staging / "source" / "original.pdf")
 
     chapter_by_block: dict[str, tuple[str, str]] = {}
+    bilingual = bool(_config_value(options, "translation", "bilingual", False))
     for chapter in chapters:
-        chapter_text = "\n".join(render_block_markdown(block) for block in chapter.blocks)
+        chapter_text = "\n".join(
+            render_block_markdown(block, bilingual=bilingual)
+            for block in chapter.blocks
+        )
         chapter_path = staging / chapter.path
         chapter_path.parent.mkdir(parents=True, exist_ok=True)
         chapter_path.write_text(chapter_text, encoding="utf-8")
@@ -130,8 +185,8 @@ def _write_book_directory(
 
     _write_json(staging / "book.json", _book_manifest(options, ocr_data, chapters))
     _write_json(staging / "source_map.json", build_source_map(blocks, chapter_by_block))
-    _write_json(staging / "terms.json", {"terms": []})
-    _write_json(staging / "translation.json", _translation_payload(blocks))
+    _write_json(staging / "terms.json", {"terms": extract_terms(block.text for block in blocks)})
+    _write_json(staging / "translation.json", _translation_payload(blocks, options))
     _write_json(staging / "reading_config.json", _reading_config(options))
     _write_json(staging / "search_index.json", _search_index(blocks, chapter_by_block, chapters))
 
@@ -166,13 +221,26 @@ def _book_manifest(
     }
 
 
-def _translation_payload(blocks: list[OcrBlock]) -> dict[str, list[dict[str, str]]]:
+def _translation_payload(blocks: list[OcrBlock], options: BuildOptions) -> dict[str, Any]:
+    target_lang = _target_lang(options)
+    provider = options.provider if options.translate else ""
+    model = _translation_model(options)
     return {
+        "provider": provider,
+        "model": model,
+        "target_lang": target_lang,
         "blocks": [
             {
                 "block_id": block.block_id,
                 "source_text": block.text,
                 "translated_text": block.translated_text or "",
+                "provider": provider,
+                "model": model,
+                "status": "translated" if block.translated_text else "source",
+                "cache_key": translation_cache_key(options.provider, target_lang, block.text)
+                if options.translate and block.text
+                else "",
+                "error": "",
             }
             for block in blocks
             if block.text or block.translated_text
@@ -232,6 +300,26 @@ def _target_lang(options: BuildOptions) -> str:
             options.target_lang,
         )
     )
+
+
+def _translation_model(options: BuildOptions) -> str:
+    if not options.translate:
+        return ""
+    if options.provider == "deepseek":
+        return str(_config_value(options, "translation", "model", "deepseek-v4-flash"))
+    if options.provider == "noop" and options.translate:
+        return "noop"
+    return ""
+
+
+def _translation_cache_store(options: BuildOptions) -> TranslationCacheStore | None:
+    if not bool(_config_value(options, "translation", "cache", True)):
+        return None
+    if not bool(_config_value(options, "translation", "cache_enabled", True)):
+        return None
+    configured_path = _config_value(options, "translation", "cache_path", "")
+    cache_path = Path(configured_path) if configured_path else options.ocr_output / ".bookmd_translation_cache.jsonl"
+    return TranslationCacheStore(cache_path)
 
 
 def _config_value(

@@ -9,7 +9,8 @@
 - 从样例 `ocr_output` 生成 `.bookmd`。
 - 校验 `.bookmd` 内部结构。
 - 保留 Markdown、assets、source map、搜索索引和原 PDF。
-- 提供 Android WebView 阅读器工程骨架。
+- 提供 Android WebView 阅读器工程。
+- 支持可缓存、可测试的 DeepSeek/Noop 翻译边界与双语阅读输出。
 
 ## 快速验证
 
@@ -17,6 +18,12 @@
 python -m pytest
 python -m converter build --source-pdf samples/ocr_output_sample/original.pdf --ocr-output samples/ocr_output_sample --output samples/bookmd_sample/sample.bookmd --translate false
 python -m converter validate samples/bookmd_sample/sample.bookmd
+```
+
+发布前完整验证：
+
+```bash
+python scripts/verify_release.py
 ```
 
 ## 当前阶段
@@ -40,12 +47,29 @@ python -m converter validate samples/bookmd_sample/sample.bookmd
 - renderer 支持代码块、Markdown 表格、脚注、引用链接、锚点和语言模式。
 - Android 增加设置页、图片/表格全屏查看和章节阅读进度保存/恢复。
 
+第五阶段完成转换器和翻译链路加固：
+
+- `translator_core` 提供 mockable DeepSeek client、JSON 响应校验、JSONL translation cache。
+- 转换器生成 `terms.json`、更完整的 `translation.json`、翻译后的 source map/search index。
+- 支持 `translation.bilingual: true` 的双语章节 Markdown。
+
+Phase 6 完成个人 MVP 发布验收闭环：
+
+- `scripts/verify_release.py` 串起 Python tests、样例 `.bookmd` 构建/校验、renderer parity，检测到 Android SDK 时构建 debug APK。
+- 文档覆盖 Windows converter、DeepSeek setup、Android reader、troubleshooting、release checklist 和 final acceptance。
+
 ## 目录
 
 - `apps/converter_desktop/`: Windows/desktop 转换器 CLI。
 - `apps/reader-android/`: Android WebView 阅读器骨架。
 - `packages/bookmd_core/`: `.bookmd` 打包与校验。
 - `packages/source_map_core/`: OCR block 规范化与 source map。
-- `packages/translator_core/`: 翻译接口与 DeepSeek 配置守卫。
+- `packages/translator_core/`: 翻译接口、DeepSeek client、缓存和术语抽取。
 - `packages/markdown_renderer/`: 移动端渲染资产。
 - `samples/ocr_output_sample/`: 不依赖真实 OCR 的假数据样例。
+
+Android debug APK 构建后位于：
+
+```text
+apps/reader-android/app/build/outputs/apk/debug/app-debug.apk
+```

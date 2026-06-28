@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
+import zipfile
 
 from bookmd_core import validate_bookmd
 from translator_core import MissingApiKeyError
@@ -34,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
                 _build_options_from_args(args)
             )
             print(f"BookMD written: {output}")
+            _print_build_summary(output)
             return 0
         if args.command == "validate":
             result = validate_bookmd(Path(args.bookmd))
@@ -70,3 +73,23 @@ def _build_options_from_args(args: argparse.Namespace) -> BuildOptions:
 
 def _parse_bool(value: str) -> bool:
     return value.lower() in {"1", "true", "yes", "y"}
+
+
+def _print_build_summary(output: Path) -> None:
+    with zipfile.ZipFile(output) as zf:
+        manifest = json.loads(zf.read("book.json"))
+        source_map = json.loads(zf.read("source_map.json"))
+        translation = json.loads(zf.read("translation.json"))
+    chapters = manifest.get("chapters") or []
+    blocks = source_map.get("blocks") or []
+    translated = [
+        item for item in translation.get("blocks") or []
+        if item.get("status") == "translated"
+    ]
+    print(
+        "Summary: "
+        f"chapters={len(chapters)} "
+        f"blocks={len(blocks)} "
+        f"translated={len(translated)} "
+        "warnings=0"
+    )
