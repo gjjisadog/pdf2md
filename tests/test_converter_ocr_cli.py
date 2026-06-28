@@ -1,4 +1,5 @@
 import json
+import subprocess
 import zipfile
 
 from converter import cli, ocr_pipeline
@@ -176,3 +177,30 @@ def test_cli_ocr_batch_splits_and_merges_outputs(tmp_path, monkeypatch):
     assert "Page 2 text" in result_md
     assert "batch 1 ok" in parse_log
     assert "batch 2 ok" in parse_log
+
+
+def test_pdfkit_splitter_limits_last_batch_to_max_pages(tmp_path, monkeypatch):
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"%PDF-1.4")
+    calls = []
+
+    monkeypatch.setattr(ocr_pipeline, "_pdfkit_page_count", lambda _source, _script: 10)
+
+    def fake_run(command, text, capture_output, check):
+        calls.append(command)
+        output = tmp_path / command[4]
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"%PDF-1.4 batch")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(ocr_pipeline.subprocess, "run", fake_run)
+
+    batches = ocr_pipeline._split_pdf_batches_with_pdfkit(
+        source,
+        batch_size=2,
+        work_dir=tmp_path / "work",
+        max_pages=5,
+    )
+
+    assert [batch.first_page for batch in batches] == [1, 3, 5]
+    assert [command[6] for command in calls] == ["2", "2", "1"]

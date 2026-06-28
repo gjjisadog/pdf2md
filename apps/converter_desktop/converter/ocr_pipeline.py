@@ -160,6 +160,7 @@ def _split_pdf_batches_with_pdfkit(
     batches: list[OcrBatch] = []
     for first_page in range(1, page_count + 1, batch_size):
         output = work_dir / f"batch_{len(batches) + 1:03d}.pdf"
+        pages_in_batch = min(batch_size, page_count - first_page + 1)
         completed = subprocess.run(
             [
                 "swift",
@@ -168,7 +169,7 @@ def _split_pdf_batches_with_pdfkit(
                 str(source_pdf),
                 str(output),
                 str(first_page),
-                str(batch_size),
+                str(pages_in_batch),
             ],
             text=True,
             capture_output=True,
