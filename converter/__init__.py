@@ -12,6 +12,7 @@ for package_root in (
     _ROOT / "packages" / "bookmd_core",
     _ROOT / "packages" / "source_map_core",
     _ROOT / "packages" / "translator_core",
+    _ROOT / "packages" / "ocr_client",
 ):
     if package_root.exists():
         sys.path.insert(0, str(package_root))

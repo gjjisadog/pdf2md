@@ -9,6 +9,7 @@ pythonpath = [
   "packages/bookmd_core",
   "packages/source_map_core",
   "packages/translator_core",
+  "packages/ocr_client",
   "apps/converter_desktop"
 ]
 testpaths = ["tests"]

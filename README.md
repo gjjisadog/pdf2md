@@ -58,6 +58,13 @@ Phase 6 完成个人 MVP 发布验收闭环：
 - `scripts/verify_release.py` 串起 Python tests、样例 `.bookmd` 构建/校验、renderer parity，检测到 Android SDK 时构建 debug APK。
 - 文档覆盖 Windows converter、DeepSeek setup、Android reader、troubleshooting、release checklist 和 final acceptance。
 
+Phase 7 增加通用 HTTP OCR API 接入：
+
+- 本项目仍不部署 OCR 模型，不安装 PaddleOCR/PaddleX/PP-StructureV3。
+- 新增 `ocr_client`，通过 `OCR_API_URL` / `OCR_API_KEY` 调用外部 HTTP OCR 服务。
+- `python -m converter ocr` 可把 PDF 转成标准 `ocr_output/`。
+- `python -m converter build-from-pdf` 可串起 OCR API 和 `.bookmd` 构建。
+
 ## 目录
 
 - `apps/converter_desktop/`: Windows/desktop 转换器 CLI。
@@ -65,6 +72,7 @@ Phase 6 完成个人 MVP 发布验收闭环：
 - `packages/bookmd_core/`: `.bookmd` 打包与校验。
 - `packages/source_map_core/`: OCR block 规范化与 source map。
 - `packages/translator_core/`: 翻译接口、DeepSeek client、缓存和术语抽取。
+- `packages/ocr_client/`: 通用 HTTP OCR API client 与 `ocr_output` 写入。
 - `packages/markdown_renderer/`: 移动端渲染资产。
 - `samples/ocr_output_sample/`: 不依赖真实 OCR 的假数据样例。
 

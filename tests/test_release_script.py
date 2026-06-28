@@ -7,5 +7,6 @@ def test_release_verification_script_documents_required_checks():
     assert "python -m pytest" in script
     assert "converter" in script
     assert "validate" in script
+    assert "test_ocr_client.py" in script
     assert "assembleDebug" in script
     assert "ANDROID_HOME" in script

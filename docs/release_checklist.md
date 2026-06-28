@@ -5,6 +5,7 @@ Use this checklist before treating the personal MVP as a releasable local build.
 ## Automated
 
 - Python tests: `python -m pytest`
+- OCR API adapter tests: `python -m pytest tests/test_ocr_client.py tests/test_converter_ocr_cli.py`
 - Release verifier: `python scripts/verify_release.py`
 - Sample package: build `samples/ocr_output_sample` into a temporary `.bookmd`
 - Package validation: `python -m converter validate path/to/sample.bookmd`
@@ -22,5 +23,6 @@ Use this checklist before treating the personal MVP as a releasable local build.
 
 - OCR/Paddle deployment is not included.
 - DeepSeek live translation is optional and not required in automated tests.
+- OCR live API calls are optional and not required in automated tests.
 - PDF bbox screenshot tracing is represented by source-map metadata, not native PDF overlay.
 - Android reader remains an MVP WebView reader, not a fully native paginated engine.

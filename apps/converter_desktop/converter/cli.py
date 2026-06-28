@@ -7,9 +7,11 @@ import zipfile
 
 from bookmd_core import validate_bookmd
 from translator_core import MissingApiKeyError
+from ocr_client import MissingOcrConfigError, OcrApiError
 
 from .builder import BuildOptions, ConverterError, build_bookmd
 from .config import load_config
+from .ocr_pipeline import OcrOptions, run_ocr
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -25,6 +27,19 @@ def main(argv: list[str] | None = None) -> int:
     build_parser.add_argument("--provider", default="noop")
     build_parser.add_argument("--config")
 
+    ocr_parser = subparsers.add_parser("ocr")
+    ocr_parser.add_argument("--source-pdf", required=True)
+    ocr_parser.add_argument("--output-dir", required=True)
+
+    build_from_pdf_parser = subparsers.add_parser("build-from-pdf")
+    build_from_pdf_parser.add_argument("--source-pdf", required=True)
+    build_from_pdf_parser.add_argument("--ocr-output", required=True)
+    build_from_pdf_parser.add_argument("--output", required=True)
+    build_from_pdf_parser.add_argument("--translate", default="false")
+    build_from_pdf_parser.add_argument("--target-lang", default="zh")
+    build_from_pdf_parser.add_argument("--provider", default="noop")
+    build_from_pdf_parser.add_argument("--config")
+
     validate_parser = subparsers.add_parser("validate")
     validate_parser.add_argument("bookmd")
 
@@ -38,6 +53,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"BookMD written: {output}")
             _print_build_summary(output)
             return 0
+        if args.command == "ocr":
+            output_dir = run_ocr(_ocr_options_from_args(args))
+            print(f"OCR output written: {output_dir}")
+            return 0
+        if args.command == "build-from-pdf":
+            run_ocr(_ocr_options_from_args(args))
+            output = build_bookmd(_build_options_from_args(args))
+            print(f"BookMD written: {output}")
+            _print_build_summary(output)
+            return 0
         if args.command == "validate":
             result = validate_bookmd(Path(args.bookmd))
             if result.valid:
@@ -46,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
             for error in result.errors:
                 print(f"ERROR: {error}")
             return 1
-    except (ConverterError, MissingApiKeyError, FileNotFoundError) as exc:
+    except (ConverterError, MissingApiKeyError, MissingOcrConfigError, OcrApiError, FileNotFoundError) as exc:
         print(f"ERROR: {exc}")
         return 1
 
@@ -68,6 +93,14 @@ def _build_options_from_args(args: argparse.Namespace) -> BuildOptions:
         target_lang=target_lang,
         provider=args.provider,
         config=config,
+    )
+
+
+def _ocr_options_from_args(args: argparse.Namespace) -> OcrOptions:
+    output_dir = getattr(args, "output_dir", None) or getattr(args, "ocr_output")
+    return OcrOptions(
+        source_pdf=Path(args.source_pdf),
+        output_dir=Path(output_dir),
     )
 
 

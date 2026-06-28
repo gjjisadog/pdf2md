@@ -12,6 +12,14 @@ The converter requires both `result.json` and `result.md`, even though MVP mainl
 
 Check `--source-pdf`. Paths with spaces are supported when quoted.
 
+## `OCR_API_URL is required`
+
+Set `OCR_API_URL` before using `python -m converter ocr` or `python -m converter build-from-pdf`. `OCR_API_KEY` is optional for services that do not require bearer auth.
+
+## OCR API response is rejected
+
+The generic OCR adapter expects a JSON object with a `blocks` array. Each block should include text, page, type, and bbox fields when available. Run the OCR command alone first so you can inspect the generated `result.json` before building `.bookmd`.
+
 ## `DEEPSEEK_API_KEY is required`
 
 Use `--translate false` for the default path, use `--provider noop` for local no-op translation tests, or set `DEEPSEEK_API_KEY` before selecting the DeepSeek provider.

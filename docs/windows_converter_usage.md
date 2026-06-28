@@ -44,7 +44,33 @@ ocr_output/
   assets/
 ```
 
-The converter does not run OCR and does not install Paddle-related tooling.
+The converter does not deploy local OCR models and does not install Paddle-related tooling. It can optionally call an external generic HTTP OCR API.
+
+Generic OCR API environment:
+
+```bash
+export OCR_API_URL=https://example.local/ocr
+export OCR_API_KEY=your_key
+export OCR_API_TIMEOUT=120
+```
+
+Run OCR only:
+
+```bash
+python -m converter ocr \
+  --source-pdf "D:/books/test.pdf" \
+  --output-dir "D:/books/ocr_output/test"
+```
+
+Run OCR and build `.bookmd`:
+
+```bash
+python -m converter build-from-pdf \
+  --source-pdf "D:/books/test.pdf" \
+  --ocr-output "D:/books/ocr_output/test" \
+  --output "D:/books/output/test.bookmd" \
+  --translate false
+```
 
 No-op translation smoke test:
 

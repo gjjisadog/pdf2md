@@ -27,6 +27,7 @@ def main() -> int:
             "--translate",
             "false",
         ],
+        [sys.executable, "-m", "pytest", "tests/test_ocr_client.py", "tests/test_converter_ocr_cli.py"],
         [
             sys.executable,
             "-m",
@@ -39,6 +40,7 @@ def main() -> int:
 
     # Human-readable command markers kept literal for docs/tests:
     # python -m pytest
+    # python -m pytest tests/test_ocr_client.py tests/test_converter_ocr_cli.py
     # python -m converter build ... && python -m converter validate ...
     # cd apps/reader-android && ./gradlew assembleDebug
     with tempfile.TemporaryDirectory(prefix="bookmd-release-") as temp_name:
