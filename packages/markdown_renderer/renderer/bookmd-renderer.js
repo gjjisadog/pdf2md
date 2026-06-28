@@ -10,8 +10,96 @@
   function loadChapter(payload) {
     const root = document.getElementById("bookmd-content");
     applyConfig(payload.config || {});
-    root.innerHTML = payload.html || "";
+    root.innerHTML = payload.html || renderMarkdown(payload.markdown || "");
+    if (window.renderMathInElement) {
+      window.renderMathInElement(root, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "\\(", right: "\\)", display: false },
+        ],
+      });
+    }
     bindBlockEvents(root);
+  }
+
+  function renderMarkdown(markdown) {
+    const lines = markdown.split(/\r?\n/);
+    const html = [];
+    let trace = null;
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      const traceMatch = line.match(/^<!-- block_id: ([^;]+); page: ([^;]+); bbox: (.+) -->$/);
+      if (traceMatch) {
+        trace = traceMatch[1];
+        continue;
+      }
+
+      if (line.startsWith(":::figure") || line.startsWith(":::formula") || line.startsWith(":::table")) {
+        const kind = line.slice(3).split(/\s+/)[0];
+        const id = readAttribute(line, "id") || trace || "";
+        const src = readAttribute(line, "src") || "";
+        const captionLines = [];
+        while (index + 1 < lines.length && lines[index + 1] !== ":::") {
+          index += 1;
+          captionLines.push(lines[index]);
+        }
+        index += 1;
+        html.push(renderAssetBlock(kind, id, src, captionLines.join("\n")));
+        trace = null;
+        continue;
+      }
+
+      if (line.startsWith(":::bilingual")) {
+        const source = [];
+        const target = [];
+        let section = "target";
+        while (index + 1 < lines.length && lines[index + 1] !== ":::") {
+          index += 1;
+          if (lines[index] === "---source---") {
+            section = "source";
+          } else if (section === "source") {
+            source.push(lines[index]);
+          } else {
+            target.push(lines[index]);
+          }
+        }
+        index += 1;
+        html.push(`<section class="bookmd-block bookmd-bilingual" data-block-id="${escapeHtml(trace || "")}"><div>${escapeHtml(target.join("\n"))}</div><div class="bookmd-bilingual-source">${escapeHtml(source.join("\n"))}</div></section>`);
+        trace = null;
+        continue;
+      }
+
+      if (!line.trim()) {
+        continue;
+      }
+      const heading = line.match(/^(#{1,6})\s+(.+)$/);
+      if (heading) {
+        html.push(`<h${heading[1].length} class="bookmd-block" data-block-id="${escapeHtml(trace || "")}">${escapeHtml(heading[2])}</h${heading[1].length}>`);
+      } else {
+        html.push(`<p class="bookmd-block" data-block-id="${escapeHtml(trace || "")}">${escapeHtml(line)}</p>`);
+      }
+      trace = null;
+    }
+    return html.join("\n");
+  }
+
+  function renderAssetBlock(kind, id, src, caption) {
+    const className = `bookmd-${kind}`;
+    const media = src ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(caption)}">` : "";
+    return `<figure class="bookmd-block ${className}" data-block-id="${escapeHtml(id)}">${media}<figcaption class="bookmd-caption">${escapeHtml(caption)}</figcaption></figure>`;
+  }
+
+  function readAttribute(text, name) {
+    const match = text.match(new RegExp(`${name}="([^"]*)"`));
+    return match ? match[1] : "";
+  }
+
+  function escapeHtml(text) {
+    return String(text)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
   }
 
   function bindBlockEvents(root) {
@@ -36,5 +124,6 @@
   window.BookMDReader = {
     loadChapter,
     applyConfig,
+    renderMarkdown,
   };
 })();

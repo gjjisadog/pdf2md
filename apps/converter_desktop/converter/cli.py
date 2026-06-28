@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 from bookmd_core import validate_bookmd
+from translator_core import MissingApiKeyError
 
 from .builder import BuildOptions, ConverterError, build_bookmd
 
@@ -47,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
             for error in result.errors:
                 print(f"ERROR: {error}")
             return 1
-    except ConverterError as exc:
+    except (ConverterError, MissingApiKeyError) as exc:
         print(f"ERROR: {exc}")
         return 1
 

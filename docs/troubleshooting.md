@@ -25,3 +25,7 @@ python -m converter validate path/to/book.bookmd
 ```
 
 The command reports missing required files.
+
+## Android build tool not found
+
+The MVP repository includes a standard Gradle/Kotlin Android project structure, but this machine may not have `gradle` or an Android SDK installed. Open `apps/reader-android` in Android Studio, or install Gradle/Android SDK tooling before running an APK build.

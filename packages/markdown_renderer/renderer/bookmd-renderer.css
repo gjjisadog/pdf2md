@@ -67,6 +67,24 @@ body {
   text-align: center;
 }
 
+.bookmd-bilingual {
+  display: grid;
+  gap: 0.45rem;
+  margin: 1rem 0;
+  padding-inline-start: 0.85rem;
+  border-inline-start: 3px solid var(--bookmd-accent);
+}
+
+.bookmd-bilingual-source {
+  color: var(--bookmd-muted);
+  font-size: 0.9em;
+}
+
+.bookmd-footnote {
+  color: var(--bookmd-muted);
+  font-size: 0.86em;
+}
+
 a {
   color: var(--bookmd-accent);
 }

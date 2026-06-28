@@ -3,13 +3,16 @@
         android:allowBackup="true"
         android:label="BookMD Reader"
         android:theme="@style/AppTheme">
+        <activity android:name=".ReaderActivity" />
+        <activity android:name=".TocActivity" />
         <activity
-            android:name=".MainActivity"
+            android:name=".BookShelfActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".MainActivity" />
     </application>
 </manifest>

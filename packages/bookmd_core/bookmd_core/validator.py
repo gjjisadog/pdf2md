@@ -42,14 +42,14 @@ def validate_bookmd(path: str | Path) -> ValidationResult:
                 errors.append("Missing chapter Markdown files under chapters/")
 
             if "book.json" in names:
-                _validate_book_manifest(zf.read("book.json"), errors)
+                _validate_book_manifest(zf.read("book.json"), names, errors)
     except zipfile.BadZipFile:
         errors.append(f"Invalid zip archive: {archive_path}")
 
     return ValidationResult(valid=not errors, errors=errors, warnings=warnings)
 
 
-def _validate_book_manifest(payload: bytes, errors: list[str]) -> None:
+def _validate_book_manifest(payload: bytes, names: set[str], errors: list[str]) -> None:
     try:
         data = json.loads(payload.decode("utf-8"))
     except json.JSONDecodeError as exc:
@@ -58,3 +58,14 @@ def _validate_book_manifest(payload: bytes, errors: list[str]) -> None:
 
     if "chapters" not in data or not isinstance(data["chapters"], list):
         errors.append("book.json must contain a chapters list")
+        return
+
+    for chapter in data["chapters"]:
+        if not isinstance(chapter, dict):
+            errors.append("book.json chapters must contain objects")
+            continue
+        path = chapter.get("path")
+        if not path:
+            errors.append("book.json chapter is missing path")
+        elif path not in names:
+            errors.append(f"Chapter file listed in book.json is missing: {path}")

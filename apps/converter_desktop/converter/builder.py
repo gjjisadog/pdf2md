@@ -36,7 +36,10 @@ def build_bookmd(options: BuildOptions) -> Path:
     if options.translate and options.provider == "deepseek":
         DeepSeekConfig.from_env()
 
-    data = json.loads((options.ocr_output / "result.json").read_text(encoding="utf-8"))
+    try:
+        data = json.loads((options.ocr_output / "result.json").read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ConverterError(f"result.json is not valid JSON: {exc}") from exc
     blocks = normalize_blocks(data)
     if not blocks:
         raise ConverterError("OCR result contains no blocks")

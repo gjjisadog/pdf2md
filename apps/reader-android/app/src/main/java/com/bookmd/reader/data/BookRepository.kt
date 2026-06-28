@@ -2,6 +2,7 @@ package com.bookmd.reader.data
 
 import java.io.File
 import java.util.zip.ZipFile
+import org.json.JSONObject
 
 class BookRepository(private val rootDir: File) {
     fun importBook(bookmd: File): File {
@@ -24,7 +25,31 @@ class BookRepository(private val rootDir: File) {
         return target
     }
 
-    fun readManifest(bookDir: File): String {
-        return File(bookDir, "book.json").readText()
+    fun readManifest(bookDir: File): BookManifest {
+        val json = JSONObject(File(bookDir, "book.json").readText())
+        val chaptersJson = json.optJSONArray("chapters")
+        val chapters = mutableListOf<BookChapter>()
+        if (chaptersJson != null) {
+            for (index in 0 until chaptersJson.length()) {
+                val item = chaptersJson.getJSONObject(index)
+                chapters.add(
+                    BookChapter(
+                        id = item.optString("id"),
+                        title = item.optString("title"),
+                        path = item.optString("path"),
+                        order = item.optInt("order"),
+                    )
+                )
+            }
+        }
+        return BookManifest(
+            bookId = json.optString("book_id"),
+            title = json.optString("title"),
+            chapters = chapters,
+        )
+    }
+
+    fun readChapterMarkdown(bookDir: File, chapter: BookChapter): String {
+        return File(bookDir, chapter.path).readText()
     }
 }
