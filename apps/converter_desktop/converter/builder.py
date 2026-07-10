@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 import tempfile
 import uuid
+import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +31,75 @@ from .markdown import render_block_markdown
 
 class ConverterError(RuntimeError):
     pass
+
+
+MEDIA_BLOCK_TYPES = {"figure", "formula", "table"}
+GENERATED_ASSET_TYPES = {"figure", "formula", "table"}
+_PDFKIT_CROP_SWIFT = r'''
+import Foundation
+import PDFKit
+import AppKit
+
+let args = CommandLine.arguments
+
+func fail(_ message: String) -> Never {
+    fputs(message + "\n", stderr)
+    exit(1)
+}
+
+if args.count != 8 {
+    fail("usage: crop_pdfkit.swift input.pdf output.png page x1 y1 x2 y2")
+}
+
+let input = URL(fileURLWithPath: args[1])
+let output = URL(fileURLWithPath: args[2])
+guard let pageNumber = Int(args[3]),
+      let x1 = Double(args[4]),
+      let y1 = Double(args[5]),
+      let x2 = Double(args[6]),
+      let y2 = Double(args[7]) else {
+    fail("invalid crop arguments")
+}
+
+guard let document = PDFDocument(url: input) else {
+    fail("failed to open pdf")
+}
+guard let page = document.page(at: max(0, pageNumber - 1)) else {
+    fail("page not found")
+}
+
+let bounds = page.bounds(for: .mediaBox)
+let scale = min(bounds.width / max(x2, 1.0), bounds.height / max(y2, 1.0))
+let margin = 8.0
+let left = max(0.0, x1 * scale - margin)
+let top = max(0.0, y1 * scale - margin)
+let right = min(bounds.width, x2 * scale + margin)
+let bottom = min(bounds.height, y2 * scale + margin)
+let cropWidth = right - left
+let cropHeight = bottom - top
+if cropWidth < 4 || cropHeight < 4 {
+    fail("crop too small")
+}
+
+let image = NSImage(size: NSSize(width: cropWidth * 2.0, height: cropHeight * 2.0))
+image.lockFocus()
+guard let context = NSGraphicsContext.current?.cgContext else {
+    fail("failed to create graphics context")
+}
+context.setFillColor(NSColor.white.cgColor)
+context.fill(CGRect(x: 0, y: 0, width: cropWidth * 2.0, height: cropHeight * 2.0))
+context.scaleBy(x: 2.0, y: 2.0)
+context.translateBy(x: -left, y: -(bounds.height - bottom))
+page.draw(with: .mediaBox, to: context)
+image.unlockFocus()
+
+guard let tiff = image.tiffRepresentation,
+      let bitmap = NSBitmapImageRep(data: tiff),
+      let data = bitmap.representation(using: .png, properties: [:]) else {
+    fail("failed to encode png")
+}
+try data.write(to: output)
+'''
 
 
 @dataclass(frozen=True)
@@ -169,6 +241,12 @@ def _write_book_directory(
         shutil.copytree(assets_source, staging / "assets", dirs_exist_ok=True)
     if _config_value(options, "output", "save_original_pdf", True):
         shutil.copy2(options.source_pdf, staging / "source" / "original.pdf")
+    cover_asset_path = ""
+    if _config_value(options, "output", "preserve_cover", True):
+        cover_asset_path = _generate_cover_asset(options.source_pdf, staging / "assets")
+    if _config_value(options, "output", "generate_block_assets", False):
+        blocks = _generate_missing_block_assets(options.source_pdf, blocks, staging / "assets")
+        chapters = _replace_chapter_blocks(chapters, blocks)
 
     chapter_by_block: dict[str, tuple[str, str]] = {}
     bilingual = bool(_config_value(options, "translation", "bilingual", False))
@@ -177,6 +255,8 @@ def _write_book_directory(
             render_block_markdown(block, bilingual=bilingual)
             for block in chapter.blocks
         )
+        if chapter.order == 1 and cover_asset_path:
+            chapter_text = f"![Cover](../{cover_asset_path})\n\n{chapter_text}"
         chapter_path = staging / chapter.path
         chapter_path.parent.mkdir(parents=True, exist_ok=True)
         chapter_path.write_text(chapter_text, encoding="utf-8")
@@ -189,6 +269,271 @@ def _write_book_directory(
     _write_json(staging / "translation.json", _translation_payload(blocks, options))
     _write_json(staging / "reading_config.json", _reading_config(options))
     _write_json(staging / "search_index.json", _search_index(blocks, chapter_by_block, chapters))
+
+
+def _generate_cover_asset(source_pdf: Path, assets_root: Path) -> str:
+    if not source_pdf.exists() or source_pdf.stat().st_size < 1024:
+        return ""
+    relative_path = "assets/cover/page_001.png"
+    output_path = assets_root.parent / relative_path
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="bookmd-cover-render-") as temp_name:
+        page_image = _render_pdf_page_image(source_pdf, 1, Path(temp_name))
+        if page_image is None or not page_image.exists():
+            return ""
+        shutil.copy2(page_image, output_path)
+    return relative_path if output_path.exists() else ""
+
+
+def _replace_chapter_blocks(chapters: list[Chapter], blocks: list[OcrBlock]) -> list[Chapter]:
+    block_by_id = {block.block_id: block for block in blocks}
+    return [
+        Chapter(
+            chapter_id=chapter.chapter_id,
+            title=chapter.title,
+            path=chapter.path,
+            order=chapter.order,
+            blocks=[block_by_id.get(block.block_id, block) for block in chapter.blocks],
+        )
+        for chapter in chapters
+    ]
+
+
+def _generate_missing_block_assets(
+    source_pdf: Path,
+    blocks: list[OcrBlock],
+    assets_root: Path,
+    page_renderer: Callable[[Path, int, Path], Path | None] | None = None,
+    image_cropper: Callable[[Path, list[float], Path], bool] | None = None,
+) -> list[OcrBlock]:
+    targets = [
+        block for block in blocks
+        if _needs_generated_asset(block)
+    ]
+    if not targets:
+        return blocks
+    if source_pdf.stat().st_size < 1024:
+        return blocks
+    assets_root.mkdir(parents=True, exist_ok=True)
+    generated_root = assets_root / "generated"
+    generated_root.mkdir(parents=True, exist_ok=True)
+    updated: list[OcrBlock] = []
+    with tempfile.TemporaryDirectory(prefix="bookmd-page-render-") as temp_name:
+        work_dir = Path(temp_name)
+        page_images: dict[int, Path | None] = {}
+        renderer = page_renderer or _render_pdf_page_image
+        cropper = image_cropper or _crop_page_image
+        for block in blocks:
+            if not _needs_generated_asset(block):
+                updated.append(block)
+                continue
+            relative_path = f"assets/generated/page_{block.page:03d}_{_safe_asset_name(block.block_id)}.png"
+            output_path = assets_root.parent / relative_path
+            if block.page not in page_images:
+                page_images[block.page] = renderer(source_pdf, block.page, work_dir)
+            page_image = page_images[block.page]
+            if page_image is not None and cropper(page_image, block.bbox, output_path):
+                updated.append(_with_asset_path(block, relative_path))
+                continue
+            updated.append(block)
+    return updated
+
+
+def _needs_generated_asset(block: OcrBlock) -> bool:
+    return (
+        block.type.lower() in GENERATED_ASSET_TYPES
+        and not block.asset_path
+        and len(block.bbox) >= 4
+    )
+
+
+def _render_pdf_block_asset(
+    source_pdf: Path,
+    page: int,
+    bbox: list[float],
+    output_path: Path,
+    work_dir: Path,
+) -> Path | None:
+    rendered = _crop_pdf_block_with_pdfkit(source_pdf, page, bbox, output_path, work_dir)
+    if rendered:
+        return rendered
+    page_image = _render_pdf_page_image(source_pdf, page, work_dir)
+    if page_image and _crop_page_image(page_image, bbox, output_path):
+        return output_path
+    return None
+
+
+def _crop_pdf_block_with_pdfkit(
+    source_pdf: Path,
+    page: int,
+    bbox: list[float],
+    output_path: Path,
+    work_dir: Path,
+) -> Path | None:
+    swift = shutil.which("swift")
+    if not swift or len(bbox) < 4:
+        return None
+    work_dir.mkdir(parents=True, exist_ok=True)
+    script = work_dir / "crop_pdfkit.swift"
+    script.write_text(_PDFKIT_CROP_SWIFT, encoding="utf-8")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        completed = subprocess.run(
+            [
+                swift,
+                str(script),
+                str(source_pdf),
+                str(output_path),
+                str(page),
+                *[str(value) for value in bbox[:4]],
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=8,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+    if completed.returncode != 0 or not output_path.exists():
+        return None
+    return output_path
+
+
+def _render_pdf_page_image(source_pdf: Path, page: int, work_dir: Path) -> Path | None:
+    pdftoppm = shutil.which("pdftoppm")
+    if not pdftoppm:
+        return None
+    work_dir.mkdir(parents=True, exist_ok=True)
+    prefix = work_dir / f"page_{page:03d}"
+    try:
+        completed = subprocess.run(
+            [
+                pdftoppm,
+                "-f",
+                str(page),
+                "-l",
+                str(page),
+                "-singlefile",
+                "-png",
+                "-r",
+                "144",
+                str(source_pdf),
+                str(prefix),
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=8,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+    output = prefix.with_suffix(".png")
+    if completed.returncode != 0 or not output.exists():
+        return None
+    return output
+
+
+def _crop_page_image(page_image: Path, bbox: list[float], output_path: Path) -> bool:
+    sips = shutil.which("sips")
+    if not sips:
+        return False
+    image_size = _sips_image_size(sips, page_image)
+    if image_size is None:
+        return False
+    crop_box = _crop_box(bbox, image_size)
+    if crop_box is None:
+        return False
+    left, top, right, bottom = crop_box
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        completed = subprocess.run(
+            [
+                sips,
+                "-c",
+                str(bottom - top),
+                str(right - left),
+                "--cropOffset",
+                str(top),
+                str(left),
+                str(page_image),
+                "--out",
+                str(output_path),
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired:
+        return False
+    return completed.returncode == 0 and output_path.exists()
+
+
+def _sips_image_size(sips: str, image_path: Path) -> tuple[int, int] | None:
+    try:
+        completed = subprocess.run(
+            [sips, "-g", "pixelWidth", "-g", "pixelHeight", str(image_path)],
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+    if completed.returncode != 0:
+        return None
+    width: int | None = None
+    height: int | None = None
+    for line in completed.stdout.splitlines():
+        if "pixelWidth:" in line:
+            width = int(line.rsplit(":", 1)[1].strip())
+        if "pixelHeight:" in line:
+            height = int(line.rsplit(":", 1)[1].strip())
+    if not width or not height:
+        return None
+    return width, height
+
+
+def _crop_box(bbox: list[float], image_size: tuple[int, int]) -> tuple[int, int, int, int] | None:
+    try:
+        x1, y1, x2, y2 = [float(value) for value in bbox[:4]]
+    except (TypeError, ValueError):
+        return None
+    if x2 <= x1 or y2 <= y1:
+        return None
+    width, height = image_size
+    if x2 > width or y2 > height:
+        scale = min(width / max(x2, 1), height / max(y2, 1))
+        x1, y1, x2, y2 = x1 * scale, y1 * scale, x2 * scale, y2 * scale
+    margin = 8
+    left = max(0, int(x1) - margin)
+    top = max(0, int(y1) - margin)
+    right = min(width, int(x2) + margin)
+    bottom = min(height, int(y2) + margin)
+    if right - left < 4 or bottom - top < 4:
+        return None
+    return left, top, right, bottom
+
+
+def _safe_asset_name(block_id: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9_-]+", "_", block_id).strip("_")
+    return safe or "block"
+
+
+def _with_asset_path(block: OcrBlock, asset_path: str) -> OcrBlock:
+    return OcrBlock(
+        block_id=block.block_id,
+        page=block.page,
+        type=block.type,
+        bbox=block.bbox,
+        text=block.text,
+        level=block.level,
+        asset_path=asset_path,
+        latex=block.latex,
+        markdown=block.markdown,
+        caption=block.caption,
+        translated_text=block.translated_text,
+    )
 
 
 def _book_manifest(

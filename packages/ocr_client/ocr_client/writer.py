@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from source_map_core import build_source_map, normalize_blocks
+
 
 def write_ocr_output(response: Mapping[str, Any], output_dir: Path | str) -> Path:
     target = Path(output_dir)
@@ -23,12 +25,22 @@ def write_ocr_output(response: Mapping[str, Any], output_dir: Path | str) -> Pat
         json.dumps(normalized, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    write_ocr_source_map(normalized, target)
     (target / "result.md").write_text(_render_result_markdown(normalized["blocks"]), encoding="utf-8")
     (target / "parse.log").write_text(
         f"created_at={datetime.now(timezone.utc).isoformat()}\nblocks={len(normalized['blocks'])}\n",
         encoding="utf-8",
     )
     return target
+
+
+def write_ocr_source_map(result_json: Mapping[str, Any], output_dir: Path | str) -> None:
+    target = Path(output_dir)
+    source_map = build_source_map(normalize_blocks(result_json), {})
+    (target / "source_map.json").write_text(
+        json.dumps(source_map, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _write_assets(assets: list[Any], output_dir: Path) -> None:

@@ -178,6 +178,8 @@ def _http_transport(payload: dict[str, Any], config: DeepSeekConfig) -> dict[str
         headers={
             "Authorization": f"Bearer {config.api_key}",
             "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "pdf2md-converter/0.1",
         },
         method="POST",
     )

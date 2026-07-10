@@ -10,6 +10,7 @@
 - 校验 `.bookmd` 内部结构。
 - 保留 Markdown、assets、source map、搜索索引和原 PDF。
 - 提供 Android WebView 阅读器工程。
+- 提供 iPadOS SwiftUI + WKWebView 阅读器工程。
 - 支持可缓存、可测试的 DeepSeek/Noop 翻译边界与双语阅读输出。
 
 ## 快速验证
@@ -65,10 +66,18 @@ Phase 7 增加通用 HTTP OCR API 接入：
 - `python -m converter ocr` 可把 PDF 转成标准 `ocr_output/`。
 - `python -m converter build-from-pdf` 可串起 OCR API 和 `.bookmd` 构建。
 
+Phase 8 增加 iPadOS BookMD 阅读器：
+
+- `apps/reader-ios/` 提供 iPad mini 优先的 SwiftUI + WKWebView 阅读器。
+- 支持 Files 导入 `.bookmd`、书架、目录、阅读、搜索跳转、source map、阅读进度、术语表、PDF 页回看和阅读设置。
+- `python3 apps/reader-ios/scripts/verify_ios_static.py` 验证 iOS 工程结构、renderer parity 和真实 `.bookmd` 样本基准。
+- `python3 apps/reader-ios/scripts/verify_ios_release.py` 是 iOS release gate；当前本机 Xcode 框架错配时可用 `--allow-xcode-blocked` 保留静态验收结果。
+
 ## 目录
 
 - `apps/converter_desktop/`: Windows/desktop 转换器 CLI。
 - `apps/reader-android/`: Android WebView 阅读器骨架。
+- `apps/reader-ios/`: iPadOS SwiftUI + WKWebView 阅读器工程。
 - `packages/bookmd_core/`: `.bookmd` 打包与校验。
 - `packages/source_map_core/`: OCR block 规范化与 source map。
 - `packages/translator_core/`: 翻译接口、DeepSeek client、缓存和术语抽取。
@@ -80,4 +89,10 @@ Android debug APK 构建后位于：
 
 ```text
 apps/reader-android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+iPadOS 阅读器工程位于：
+
+```text
+apps/reader-ios/BookMDReader.xcodeproj
 ```

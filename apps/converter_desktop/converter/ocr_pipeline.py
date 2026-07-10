@@ -5,10 +5,12 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
-import tempfile
 from typing import Any
 
 from ocr_client import OcrApiConfig, OcrHttpClient, OcrJobClient, write_ocr_output
+from source_map_core import build_source_map, normalize_blocks
+
+from .markdown import render_block_markdown
 
 
 _PDFKIT_SPLITTER_SWIFT = r'''
@@ -72,6 +74,7 @@ class OcrOptions:
     output_dir: Path
     batch_size: int = 0
     max_pages: int | None = None
+    page_range: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -83,7 +86,7 @@ class OcrBatch:
 def run_ocr(options: OcrOptions) -> Path:
     if not options.source_pdf.exists():
         raise FileNotFoundError(f"Source PDF does not exist: {options.source_pdf}")
-    if options.batch_size > 0:
+    if options.batch_size > 0 or options.page_range:
         return run_ocr_batches(options)
     client = _ocr_client_from_env()
     if hasattr(client, "parse_to_output"):
@@ -94,24 +97,48 @@ def run_ocr(options: OcrOptions) -> Path:
 
 def run_ocr_batches(options: OcrOptions) -> Path:
     client = _ocr_client_from_env()
-    with tempfile.TemporaryDirectory(prefix="bookmd-ocr-batches-") as temp_name:
-        temp_root = Path(temp_name)
-        batches = split_pdf_batches(
-            options.source_pdf,
-            options.batch_size,
-            temp_root / "inputs",
-            options.max_pages,
-        )
-        batch_outputs: list[tuple[OcrBatch, Path]] = []
-        for index, batch in enumerate(batches, start=1):
-            batch_output = temp_root / "outputs" / f"batch_{index:03d}"
+    batch_size = _effective_batch_size(options)
+    batch_input_dir = options.output_dir / "batch_inputs"
+    batch_output_root = options.output_dir / "batches"
+    batches = split_pdf_batches(
+        options.source_pdf,
+        batch_size,
+        batch_input_dir,
+        options.max_pages,
+        options.page_range,
+    )
+    batch_output_root.mkdir(parents=True, exist_ok=True)
+    manifest_entries = _batch_manifest_entries(batches, batch_output_root)
+    _write_batch_manifest(options.output_dir, options, manifest_entries)
+    batch_outputs: list[tuple[OcrBatch, Path]] = []
+    for index, batch in enumerate(batches, start=1):
+        batch_output = batch_output_root / f"batch_{index:03d}"
+        entry = manifest_entries[index - 1]
+        if _batch_output_complete(batch_output):
+            entry["status"] = "succeeded"
+            entry.pop("error", None)
+            batch_outputs.append((batch, batch_output))
+            _write_batch_manifest(options.output_dir, options, manifest_entries)
+            continue
+        entry["status"] = "running"
+        entry.pop("error", None)
+        _write_batch_manifest(options.output_dir, options, manifest_entries)
+        try:
             if hasattr(client, "parse_to_output"):
                 client.parse_to_output(batch.path, batch_output)
             else:
                 response = client.parse_pdf(batch.path)
                 write_ocr_output(response, batch_output)
-            batch_outputs.append((batch, batch_output))
-        return merge_ocr_batch_outputs(batch_outputs, options.output_dir)
+        except Exception as exc:
+            entry["status"] = "failed"
+            entry["error"] = str(exc)
+            _write_batch_manifest(options.output_dir, options, manifest_entries)
+            raise
+        entry["status"] = "succeeded"
+        entry.pop("error", None)
+        batch_outputs.append((batch, batch_output))
+        _write_batch_manifest(options.output_dir, options, manifest_entries)
+    return merge_ocr_batch_outputs(batch_outputs, options.output_dir)
 
 
 def split_pdf_batches(
@@ -119,10 +146,11 @@ def split_pdf_batches(
     batch_size: int,
     work_dir: Path,
     max_pages: int | None = None,
+    page_range: tuple[int, int] | None = None,
 ) -> list[OcrBatch]:
     if shutil.which("swift"):
         try:
-            return _split_pdf_batches_with_pdfkit(source_pdf, batch_size, work_dir, max_pages)
+            return _split_pdf_batches_with_pdfkit(source_pdf, batch_size, work_dir, max_pages, page_range)
         except RuntimeError:
             pass
     try:
@@ -135,15 +163,16 @@ def split_pdf_batches(
     work_dir.mkdir(parents=True, exist_ok=True)
     reader = PdfReader(str(source_pdf))
     batches: list[OcrBatch] = []
-    page_count = min(len(reader.pages), max_pages or len(reader.pages))
-    for start in range(0, page_count, batch_size):
+    first_page, last_page = _selected_page_bounds(len(reader.pages), max_pages, page_range)
+    for start_page in range(first_page, last_page + 1, batch_size):
         writer = PdfWriter()
-        for page in reader.pages[start : min(start + batch_size, page_count)]:
-            writer.add_page(page)
+        end_page = min(start_page + batch_size - 1, last_page)
+        for page_index in range(start_page - 1, end_page):
+            writer.add_page(reader.pages[page_index])
         output = work_dir / f"batch_{len(batches) + 1:03d}.pdf"
         with output.open("wb") as handle:
             writer.write(handle)
-        batches.append(OcrBatch(path=output, first_page=start + 1))
+        batches.append(OcrBatch(path=output, first_page=start_page))
     return batches
 
 
@@ -152,15 +181,16 @@ def _split_pdf_batches_with_pdfkit(
     batch_size: int,
     work_dir: Path,
     max_pages: int | None = None,
+    page_range: tuple[int, int] | None = None,
 ) -> list[OcrBatch]:
     work_dir.mkdir(parents=True, exist_ok=True)
     script = work_dir / "split_pdfkit.swift"
     script.write_text(_PDFKIT_SPLITTER_SWIFT, encoding="utf-8")
-    page_count = min(_pdfkit_page_count(source_pdf, script), max_pages or 10**9)
+    first_page, last_page = _selected_page_bounds(_pdfkit_page_count(source_pdf, script), max_pages, page_range)
     batches: list[OcrBatch] = []
-    for first_page in range(1, page_count + 1, batch_size):
+    for first_page in range(first_page, last_page + 1, batch_size):
         output = work_dir / f"batch_{len(batches) + 1:03d}.pdf"
-        pages_in_batch = min(batch_size, page_count - first_page + 1)
+        pages_in_batch = min(batch_size, last_page - first_page + 1)
         completed = subprocess.run(
             [
                 "swift",
@@ -179,6 +209,29 @@ def _split_pdf_batches_with_pdfkit(
             raise RuntimeError(completed.stderr.strip() or completed.stdout.strip())
         batches.append(OcrBatch(path=output, first_page=first_page))
     return batches
+
+
+def _selected_page_bounds(
+    total_pages: int,
+    max_pages: int | None = None,
+    page_range: tuple[int, int] | None = None,
+) -> tuple[int, int]:
+    if total_pages < 1:
+        raise RuntimeError("PDF contains no pages")
+    if page_range:
+        first_page, requested_last_page = page_range
+    else:
+        first_page, requested_last_page = 1, total_pages
+    if first_page < 1 or requested_last_page < first_page:
+        raise ValueError("page range must be in START-END form with START >= 1 and END >= START")
+    last_page = min(requested_last_page, total_pages)
+    if max_pages is not None:
+        if max_pages < 1:
+            raise ValueError("max_pages must be greater than 0")
+        last_page = min(last_page, first_page + max_pages - 1)
+    if first_page > total_pages:
+        raise ValueError(f"page range starts after the PDF ends: start={first_page}, total_pages={total_pages}")
+    return first_page, last_page
 
 
 def _pdfkit_page_count(source_pdf: Path, script: Path) -> int:
@@ -213,9 +266,84 @@ def merge_ocr_batch_outputs(batch_outputs: list[tuple[OcrBatch, Path]], output_d
         json.dumps(merged, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    (output_dir / "result.md").write_text("\n\n".join(markdown_parts).rstrip() + "\n", encoding="utf-8")
+    _write_ocr_source_map(output_dir, merged)
+    (output_dir / "result.md").write_text(_merged_markdown(merged, markdown_parts), encoding="utf-8")
     (output_dir / "parse.log").write_text("\n".join(log_parts).rstrip() + "\n", encoding="utf-8")
     return output_dir
+
+
+def _merged_markdown(result_json: dict[str, Any], fallback_parts: list[str]) -> str:
+    blocks = normalize_blocks(result_json)
+    if not blocks:
+        return "\n\n".join(fallback_parts).rstrip() + "\n"
+    return "\n".join(render_block_markdown(block).rstrip() for block in blocks).rstrip() + "\n"
+
+
+def _write_ocr_source_map(output_dir: Path, result_json: dict[str, Any]) -> None:
+    blocks = normalize_blocks(result_json)
+    source_map = build_source_map(blocks, {})
+    (output_dir / "source_map.json").write_text(
+        json.dumps(source_map, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _batch_manifest_entries(batches: list[OcrBatch], batch_output_root: Path) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for index, batch in enumerate(batches, start=1):
+        batch_output = batch_output_root / f"batch_{index:03d}"
+        entries.append(
+            {
+                "index": index,
+                "first_page": batch.first_page,
+                "input": batch.path.name,
+                "output": str(batch_output.relative_to(batch_output_root.parent)),
+                "status": "succeeded" if _batch_output_complete(batch_output) else "pending",
+            }
+        )
+    return entries
+
+
+def _batch_output_complete(batch_output: Path) -> bool:
+    result_json = batch_output / "result.json"
+    if not result_json.exists():
+        return False
+    if not (batch_output / "result.md").exists():
+        return False
+    if not (batch_output / "parse.log").exists():
+        return False
+    try:
+        json.loads(result_json.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    return True
+
+
+def _write_batch_manifest(output_dir: Path, options: OcrOptions, entries: list[dict[str, Any]]) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "source_pdf": str(options.source_pdf),
+        "batch_size": _effective_batch_size(options),
+        "max_pages": options.max_pages,
+        "page_range": list(options.page_range) if options.page_range else None,
+        "batches": entries,
+    }
+    (output_dir / "batch_manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _effective_batch_size(options: OcrOptions) -> int:
+    if options.batch_size > 0:
+        return options.batch_size
+    if options.page_range:
+        first_page, last_page = options.page_range
+        selected_pages = last_page - first_page + 1
+        if options.max_pages is not None:
+            selected_pages = min(selected_pages, options.max_pages)
+        return max(1, selected_pages)
+    return options.batch_size
 
 
 def _globalized_pages(result_json: dict[str, Any], first_page: int) -> list[dict[str, Any]]:
@@ -244,12 +372,12 @@ def _globalized_pages(result_json: dict[str, Any], first_page: int) -> list[dict
     return pages
 
 
-def check_ocr_health() -> dict[str, object]:
-    client = _ocr_client_from_env()
+def check_ocr_health(timeout: int | None = None) -> dict[str, object]:
+    client = _ocr_client_from_env(timeout=timeout)
     if not hasattr(client, "check_health"):
         return {"status": "unknown", "service": "direct-ocr"}
     return client.check_health()
 
 
-def _ocr_client_from_env() -> OcrHttpClient | OcrJobClient:
-    return OcrJobClient(OcrApiConfig.from_env())
+def _ocr_client_from_env(timeout: int | None = None) -> OcrHttpClient | OcrJobClient:
+    return OcrJobClient(OcrApiConfig.from_env(timeout=timeout))

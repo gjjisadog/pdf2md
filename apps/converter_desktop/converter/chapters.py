@@ -39,16 +39,12 @@ def build_chapters(blocks: list[OcrBlock]) -> list[Chapter]:
         title = _clean_title(block.text)
         is_new_chapter = _is_chapter_heading(block, title)
         if is_new_chapter and current_blocks:
-            chapters.append(_make_chapter(len(chapters) + 1, current_title, current_blocks))
-            current_blocks = []
+            if current_title != "Untitled" or not _is_chapter_label_prelude(current_blocks):
+                chapters.append(_make_chapter(len(chapters) + 1, current_title, current_blocks))
+                current_blocks = []
         if is_new_chapter:
             current_title = title or f"Chapter {len(chapters) + 1}"
-        elif (
-            current_title == "Untitled"
-            and not current_blocks
-            and block.type == "heading"
-            and title
-        ):
+        elif current_title == "Untitled" and block.type == "heading" and title:
             current_title = title
         current_blocks.append(block)
 
@@ -70,6 +66,8 @@ def _is_chapter_heading(block: OcrBlock, title: str) -> bool:
         return False
     if _is_explicit_chapter_heading(title):
         return True
+    if _is_paper_top_level_heading(title):
+        return True
     if _starts_with_glued_toc_number(title):
         return False
     if block.page <= FRONT_MATTER_PAGE_LIMIT:
@@ -78,7 +76,17 @@ def _is_chapter_heading(block: OcrBlock, title: str) -> bool:
 
 
 def _clean_title(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip()
+    title = re.sub(r"\s+", " ", text).strip()
+    title = title.replace("–", "-").replace("—", "-")
+    title = re.sub(r"\bPART\s*I\s*-\s*", "PART I - ", title, flags=re.IGNORECASE)
+    title = re.sub(r"\bPART\s*II\s*-\s*", "PART II - ", title, flags=re.IGNORECASE)
+    title = re.sub(r"\bPARTI\s*-\s*", "PART I - ", title, flags=re.IGNORECASE)
+    title = re.sub(r"\bPARTII\s*-\s*", "PART II - ", title, flags=re.IGNORECASE)
+    title = re.sub(r"(?i)BRIDGEPWM", "BRIDGE PWM", title)
+    title = re.sub(r"(?i)\bPWMCONVERTERS\b", "PWM CONVERTERS", title)
+    title = re.sub(r",(?=\S)", ", ", title)
+    title = re.sub(r"\s+", " ", title).strip()
+    return title
 
 
 def _is_ignored_heading(title: str) -> bool:
@@ -106,6 +114,13 @@ def _is_explicit_chapter_heading(title: str) -> bool:
     )
 
 
+def _is_paper_top_level_heading(title: str) -> bool:
+    return bool(
+        re.match(r"^[IVX]+\.\s*\S+", title)
+        or re.match(r"^\d+\.(?!\d)\s*\S+", title)
+    )
+
+
 def _starts_with_glued_toc_number(title: str) -> bool:
     return bool(re.match(r"^\d{1,3}[A-Za-z]", title))
 
@@ -116,6 +131,16 @@ def _looks_like_main_heading(title: str) -> bool:
         return False
     uppercase_letters = [char for char in letters if char.upper() == char]
     return len(uppercase_letters) / len(letters) >= 0.8
+
+
+def _is_chapter_label_prelude(blocks: list[OcrBlock]) -> bool:
+    if len(blocks) > 2:
+        return False
+    for block in blocks:
+        title = _clean_title(block.text)
+        if not re.fullmatch(r"(?:chapter\s+\d+|第\s*[一二三四五六七八九十百千\d]+\s*章)", title, flags=re.IGNORECASE):
+            return False
+    return bool(blocks)
 
 
 def _make_chapter(order: int, title: str, blocks: list[OcrBlock]) -> Chapter:

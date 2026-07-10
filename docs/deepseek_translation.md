@@ -39,6 +39,14 @@ translation:
 
 The cache is JSONL and stores source text, translated text, provider, target language, cache key, and timestamp. Re-running the same conversion with the same `cache_path` reuses cached blocks before calling the provider.
 
+After building a translated `.bookmd`, run:
+
+```bash
+python -m converter quality-report path/to/book.bookmd --format json
+```
+
+For translation review, check `translation_provider`, `translation_coverage_ratio`, `untranslated_block_ids`, `missing_glossary_targets`, `markdown_risk_block_ids`, and `overlong_translation_block_ids`. A live DeepSeek pilot should have high coverage, no missing glossary targets for reviewed terms, and no Markdown risk warnings before importing to a reader.
+
 privacy notes:
 
 - With `--translate false` or `--provider noop`, no text is sent to a remote service.

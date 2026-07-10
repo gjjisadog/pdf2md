@@ -6,3 +6,19 @@ tmp/
 .gradle/
 build/
 **/build/
+
+# Local IDE state
+.idea/
+.vscode/
+
+# Xcode / Swift local state and generated output
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+.swiftpm/
+.build/
+
+# Local duplicate projects created while repairing the iOS project
+apps/reader-ios/BookMDReader [0-9]*.xcodeproj/

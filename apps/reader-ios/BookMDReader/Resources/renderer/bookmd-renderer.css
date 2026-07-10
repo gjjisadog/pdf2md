@@ -1,0 +1,215 @@
+:root {
+  color-scheme: light;
+  --bookmd-bg: #fbfaf7;
+  --bookmd-text: #24211c;
+  --bookmd-muted: #6f6a60;
+  --bookmd-rule: #d8d1c3;
+  --bookmd-accent: #1f6f78;
+}
+
+body {
+  margin: 0;
+  background: var(--bookmd-bg);
+  color: var(--bookmd-text);
+  font-family: "Noto Serif SC", "Source Han Serif SC", serif;
+}
+
+body[data-bookmd-layout="paged"] {
+  overflow: hidden;
+}
+
+body[data-bookmd-layout="scroll"] {
+  overflow-y: auto;
+}
+
+.bookmd-content {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 22px 20px 40px;
+  background: var(--bookmd-bg);
+  color: var(--bookmd-text);
+  font-size: var(--bookmd-font-size, 18px);
+  line-height: var(--bookmd-line-height, 1.75);
+}
+
+.bookmd-content[data-theme="dark"] {
+  color-scheme: dark;
+  --bookmd-bg: #171713;
+  --bookmd-text: #eee8db;
+  --bookmd-muted: #aaa293;
+  --bookmd-rule: #3c3931;
+  --bookmd-accent: #75b8c1;
+}
+
+.bookmd-content[data-layout="paged"] {
+  position: relative;
+  height: 100vh;
+  overflow-x: auto;
+  overflow-y: hidden;
+  column-width: calc(100vw - 40px);
+  column-gap: 36px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bookmd-content[data-layout="scroll"] {
+  column-count: auto;
+  height: auto;
+  overflow: visible;
+}
+
+.bookmd-content[data-layout="paged"]::after {
+  content: attr(data-page-number) " / " attr(data-page-count);
+  position: fixed;
+  right: 16px;
+  bottom: 10px;
+  z-index: 2;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bookmd-bg), var(--bookmd-text) 8%);
+  color: var(--bookmd-muted);
+  font-size: 0.78rem;
+}
+
+.bookmd-content[data-language-mode="en"] .bookmd-bilingual > div:first-child {
+  display: none;
+}
+
+.bookmd-content[data-language-mode="zh"] .bookmd-bilingual-source {
+  display: none;
+}
+
+.bookmd-block {
+  position: relative;
+  break-inside: avoid;
+}
+
+.bookmd-source-link-overlay {
+  position: absolute;
+  inset: -4px;
+  z-index: 1;
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 4px;
+}
+
+.bookmd-figure,
+.bookmd-formula,
+.bookmd-table {
+  margin: 1.25rem 0;
+  padding: 0.75rem 0;
+  border-block: 1px solid var(--bookmd-rule);
+}
+
+.bookmd-figure img,
+.bookmd-formula img,
+.bookmd-table img {
+  display: block;
+  max-width: 100%;
+  max-height: 72vh;
+  height: auto;
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+.bookmd-table {
+  overflow-x: auto;
+}
+
+.bookmd-media-frame {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bookmd-formula .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.25rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bookmd-table-scroll {
+  overflow-x: auto;
+  margin: 1rem 0;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bookmd-table-scroll table {
+  border-collapse: collapse;
+  min-width: 100%;
+}
+
+.bookmd-table-scroll th,
+.bookmd-table-scroll td {
+  border: 1px solid var(--bookmd-rule);
+  padding: 0.45rem 0.6rem;
+  text-align: start;
+  white-space: nowrap;
+}
+
+.bookmd-code {
+  overflow-x: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--bookmd-rule);
+  background: color-mix(in srgb, var(--bookmd-bg), var(--bookmd-text) 6%);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.86em;
+}
+
+.bookmd-caption {
+  margin-top: 0.5rem;
+  color: var(--bookmd-muted);
+  font-size: 0.88em;
+  text-align: center;
+}
+
+.bookmd-bilingual {
+  display: grid;
+  gap: 0.45rem;
+  margin: 1rem 0;
+  padding-inline-start: 0.85rem;
+  border-inline-start: 3px solid var(--bookmd-accent);
+}
+
+.bookmd-bilingual-source {
+  color: var(--bookmd-muted);
+  font-size: 0.9em;
+}
+
+.bookmd-footnote {
+  margin: 0.8rem 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--bookmd-rule);
+  color: var(--bookmd-muted);
+  font-size: 0.86em;
+}
+
+.bookmd-footnote-ref,
+.bookmd-reference {
+  color: var(--bookmd-accent);
+}
+
+.bookmd-source-mark {
+  cursor: pointer;
+  outline: 2px solid transparent;
+  outline-offset: 4px;
+}
+
+.bookmd-source-mark:focus,
+.bookmd-source-mark:hover {
+  outline-color: color-mix(in srgb, var(--bookmd-accent), transparent 55%);
+}
+
+.bookmd-search-hit {
+  background: #fff1a8;
+  color: #24211c;
+  border-radius: 3px;
+  padding-inline: 0.08em;
+}
+
+a {
+  color: var(--bookmd-accent);
+}

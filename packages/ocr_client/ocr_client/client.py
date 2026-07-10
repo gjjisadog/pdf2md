@@ -9,7 +9,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib import request
+from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
+
+from .writer import write_ocr_source_map
 
 
 class MissingOcrConfigError(RuntimeError):
@@ -28,14 +31,14 @@ class OcrApiConfig:
     device: str = "gpu"
 
     @classmethod
-    def from_env(cls) -> "OcrApiConfig":
+    def from_env(cls, timeout: int | None = None) -> "OcrApiConfig":
         api_url = os.getenv("OCR_API_URL")
         if not api_url:
             raise MissingOcrConfigError("OCR_API_URL is required for OCR API calls")
         return cls(
             api_url=api_url,
             api_key=os.getenv("OCR_API_KEY", ""),
-            timeout=int(os.getenv("OCR_API_TIMEOUT", "120")),
+            timeout=_positive_int(timeout, "timeout") if timeout is not None else _env_positive_int("OCR_API_TIMEOUT", 120),
             device=os.getenv("OCR_API_DEVICE", "gpu"),
         )
 
@@ -45,6 +48,25 @@ HealthTransport = Callable[[OcrApiConfig], Mapping[str, Any]]
 JobSubmitTransport = Callable[[bytes, str, OcrApiConfig], Mapping[str, Any]]
 DownloadTransport = Callable[[str, OcrApiConfig], bytes]
 StatusTransport = Callable[[str, OcrApiConfig], Mapping[str, Any]]
+
+
+def _env_positive_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise MissingOcrConfigError(f"{name} must be an integer") from exc
+    if value < 1:
+        raise MissingOcrConfigError(f"{name} must be greater than 0")
+    return value
+
+
+def _positive_int(value: int, name: str) -> int:
+    if value < 1:
+        raise MissingOcrConfigError(f"{name} must be greater than 0")
+    return value
 
 
 class OcrHttpClient:
@@ -70,6 +92,8 @@ class OcrJobClient:
         download_transport: DownloadTransport | None = None,
         poll_interval_seconds: float = 2.0,
         max_polls: int = 60,
+        retry_attempts: int = 3,
+        retry_delay_seconds: float = 1.0,
     ):
         self.config = config
         self.health_transport = health_transport or _job_health_transport
@@ -78,6 +102,8 @@ class OcrJobClient:
         self.download_transport = download_transport or _job_download_transport
         self.poll_interval_seconds = poll_interval_seconds
         self.max_polls = max_polls
+        self.retry_attempts = retry_attempts
+        self.retry_delay_seconds = retry_delay_seconds
 
     def check_health(self) -> dict[str, Any]:
         response = dict(self.health_transport(self.config))
@@ -106,8 +132,9 @@ class OcrJobClient:
                 if key == "source_map":
                     continue
                 raise OcrApiError(f"OCR job response missing file URL: {key}")
-            content = self.download_transport(str(file_url), self.config)
+            content = self._with_retries(lambda: self.download_transport(str(file_url), self.config))
             (target / filename).write_bytes(content)
+        _ensure_source_map_aligned(target)
         if not (target / "parse.log").exists():
             (target / "parse.log").write_text(f"job_id={job.get('job_id', '')}\n", encoding="utf-8")
         return target
@@ -124,11 +151,32 @@ class OcrJobClient:
                 raise OcrApiError(f"OCR job did not succeed: {job}")
             if self.poll_interval_seconds:
                 time.sleep(self.poll_interval_seconds)
-            job = self.status_transport(job_id, self.config)
+            job = self._with_retries(lambda: self.status_transport(job_id, self.config))
             status = job.get("status")
             if status == "succeeded":
                 return job
         raise OcrApiError(f"OCR job timed out waiting for success: {job_id}")
+
+    def _with_retries(self, operation: Callable[[], Any]) -> Any:
+        last_error: BaseException | None = None
+        attempts = max(1, self.retry_attempts)
+        for attempt in range(1, attempts + 1):
+            try:
+                return operation()
+            except (OSError, URLError) as exc:
+                if isinstance(exc, HTTPError) and not _is_retryable_http_error(exc):
+                    raise
+                last_error = exc
+                if attempt == attempts:
+                    break
+                if self.retry_delay_seconds:
+                    time.sleep(self.retry_delay_seconds)
+        assert last_error is not None
+        raise last_error
+
+
+def _is_retryable_http_error(error: HTTPError) -> bool:
+    return error.code >= 500 or error.code in {408, 429}
 
 
 def _job_files(job: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -138,6 +186,91 @@ def _job_files(job: Mapping[str, Any]) -> Mapping[str, Any]:
     if not isinstance(files, Mapping):
         raise OcrApiError("OCR job response must contain files object")
     return files
+
+
+def _ensure_source_map_aligned(output_dir: Path) -> None:
+    result_json_path = output_dir / "result.json"
+    if not result_json_path.exists():
+        return
+    result_json = _read_job_result_json(result_json_path)
+    expected_blocks = _ocr_block_count(result_json)
+    source_map_path = output_dir / "source_map.json"
+    if source_map_path.exists():
+        try:
+            source_map = json.loads(source_map_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            write_ocr_source_map(result_json, output_dir)
+            return
+        source_map_blocks = source_map.get("blocks") or []
+        if len(source_map_blocks) == expected_blocks and _source_map_signature(source_map_blocks) == _ocr_block_signature(result_json):
+            return
+    write_ocr_source_map(result_json, output_dir)
+
+
+def _read_job_result_json(path: Path) -> Mapping[str, Any]:
+    try:
+        result_json = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise OcrApiError(f"OCR job result.json is not valid JSON: {exc}") from exc
+    if not isinstance(result_json, Mapping):
+        raise OcrApiError("OCR job result.json must be a JSON object")
+    return result_json
+
+
+def _ocr_block_count(result_json: Mapping[str, Any]) -> int:
+    if isinstance(result_json.get("pages"), list):
+        return sum(
+            len(page.get("blocks") or [])
+            for page in result_json["pages"]
+            if isinstance(page, Mapping)
+        )
+    return len(result_json.get("blocks") or [])
+
+
+def _ocr_block_signature(result_json: Mapping[str, Any]) -> list[tuple[str, int, tuple[Any, ...], str]]:
+    if isinstance(result_json.get("pages"), list):
+        signature: list[tuple[str, int, tuple[Any, ...], str]] = []
+        for page in result_json["pages"]:
+            if not isinstance(page, Mapping):
+                continue
+            page_number = int(
+                page.get("page")
+                or page.get("page_number")
+                or page.get("page_index")
+                or 1
+            )
+            for block in page.get("blocks") or []:
+                if isinstance(block, Mapping):
+                    signature.append((
+                        str(block.get("block_id") or block.get("id") or ""),
+                        int(block.get("page") or block.get("page_number") or page_number),
+                        tuple(block.get("bbox") or []),
+                        str(block.get("text") or ""),
+                    ))
+        return signature
+    return [
+        (
+            str(block.get("block_id") or block.get("id") or ""),
+            int(block.get("page") or block.get("page_number") or 1),
+            tuple(block.get("bbox") or []),
+            str(block.get("text") or ""),
+        )
+        for block in result_json.get("blocks") or []
+        if isinstance(block, Mapping)
+    ]
+
+
+def _source_map_signature(blocks: list[Any]) -> list[tuple[str, int, tuple[Any, ...], str]]:
+    return [
+        (
+            str(block.get("block_id") or ""),
+            int(block.get("source_page") or block.get("page") or 1),
+            tuple(block.get("bbox") or []),
+            str(block.get("source_text") or ""),
+        )
+        for block in blocks
+        if isinstance(block, Mapping)
+    ]
 
 
 def _normalize_response(response: Mapping[str, Any]) -> dict[str, Any]:

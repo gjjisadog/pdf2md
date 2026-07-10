@@ -1,0 +1,94 @@
+name: BookMDReader
+options:
+  bundleIdPrefix: com.bookmd
+  deploymentTarget:
+    iOS: "17.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+targets:
+  BookMDReaderCore:
+    type: framework
+    platform: iOS
+    sources:
+      - path: Sources/BookMDReaderCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bookmd.reader.core
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/BookMDReaderCore/BookMDZipInflate.h
+        OTHER_LDFLAGS: "$(inherited) -lz"
+
+  BookMDReader:
+    type: application
+    platform: iOS
+    info:
+      path: BookMDReader/Info.plist
+      properties:
+        CFBundleDisplayName: BookMD
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: com.bookmd.bookmd
+            UTTypeDescription: BookMD Archive
+            UTTypeConformsTo:
+              - public.zip-archive
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - bookmd
+    sources:
+      - path: BookMDReader
+    resources:
+      - path: BookMDReader/Resources
+    dependencies:
+      - target: BookMDReaderCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bookmd.reader.ios
+        TARGETED_DEVICE_FAMILY: "2"
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+  BookMDReaderTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/BookMDReaderCoreTests
+    dependencies:
+      - target: BookMDReaderCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bookmd.reader.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+  BookMDReaderUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Tests/BookMDReaderUITests
+    dependencies:
+      - target: BookMDReader
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bookmd.reader.uitests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  BookMDReader:
+    build:
+      targets:
+        BookMDReader: all
+        BookMDReaderCore: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - BookMDReaderTests
+        - BookMDReaderUITests
+      gatherCoverageData: false

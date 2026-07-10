@@ -1,9 +1,21 @@
 (function () {
+  let progressReportTimer = 0;
+  let resizeTimer = 0;
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let currentConfig = {};
+  const pageState = {
+    pageIndex: 0,
+    pageCount: 1,
+  };
+
   function applyConfig(config) {
+    currentConfig = config || {};
     const root = document.getElementById("bookmd-content");
     root.style.setProperty("--bookmd-font-size", `${config.font_size || 18}px`);
     root.style.setProperty("--bookmd-line-height", config.line_height || 1.75);
     root.dataset.layout = config.layout || "paged";
+    document.body.dataset.bookmdLayout = root.dataset.layout;
     root.dataset.theme = config.theme || "light";
     root.dataset.languageMode = config.language_mode || config.default_mode || "zh";
     root.setAttribute("data-language-mode", root.dataset.languageMode);
@@ -22,6 +34,8 @@
       });
     }
     bindBlockEvents(root);
+    setupPagination();
+    reportProgress();
   }
 
   function renderMarkdown(markdown) {
@@ -125,8 +139,11 @@
 
   function renderAssetBlock(kind, id, src, caption) {
     const className = `bookmd-${kind}`;
-    const media = src ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(caption)}">` : "";
-    return `<figure class="bookmd-block bookmd-source-mark ${className}" data-block-id="${escapeHtml(id)}">${media}<figcaption class="bookmd-caption">${escapeHtml(caption)}</figcaption></figure>`;
+    const media = src
+      ? `<div class="bookmd-media-frame" tabindex="0"><img src="${escapeHtml(src)}" alt="${escapeHtml(caption)}" loading="lazy" decoding="async"></div>`
+      : "";
+    const captionHtml = caption ? `<figcaption class="bookmd-caption">${escapeHtml(caption)}</figcaption>` : "";
+    return `<figure class="bookmd-block bookmd-source-mark ${className}" data-block-id="${escapeHtml(id)}">${media}${captionHtml}</figure>`;
   }
 
   function renderCodeFence(language, lines) {
@@ -154,7 +171,19 @@
   }
 
   function renderReferenceLink(label, href) {
-    return `<a class="bookmd-reference" href="${escapeHtml(href)}">${escapeHtml(label)}</a>`;
+    const safeHref = sanitizeReferenceHref(href);
+    return `<a class="bookmd-reference" href="${escapeHtml(safeHref)}">${escapeHtml(label)}</a>`;
+  }
+
+  function sanitizeReferenceHref(href) {
+    const value = String(href || "").trim();
+    const lower = value.toLowerCase();
+    if (!value) return "#";
+    if (lower.startsWith("http://") || lower.startsWith("https://")) return value;
+    if (value.startsWith("#")) return value;
+    if (!value.includes(":")) return value;
+    if (lower.startsWith("javascript:") || lower.startsWith("file:") || lower.startsWith("content:") || lower.startsWith("data:") || lower.startsWith("intent:")) return "#";
+    return "#";
   }
 
   function renderInline(text) {
@@ -177,18 +206,30 @@
   }
 
   function bindBlockEvents(root) {
+    bindRootSourceMapEvents(root);
+
     root.querySelectorAll("[data-block-id]").forEach((node) => {
-      node.addEventListener("click", () => {
-        const block_id = node.dataset.blockId;
-        if (window.AndroidBookMD && block_id && window.AndroidBookMD.onSourceMapRequested) {
-          window.AndroidBookMD.onSourceMapRequested(block_id);
-        } else if (window.AndroidBookMD && block_id) {
-          window.AndroidBookMD.onBlockSelected(block_id);
+      if (node.dataset.blockEventsBound === "true") return;
+      node.dataset.blockEventsBound = "true";
+      const blockId = node.dataset.blockId;
+      if (blockId) {
+        node.setAttribute("role", "button");
+        node.setAttribute("tabindex", "0");
+        node.setAttribute("aria-label", `source block ${blockId}`);
+        installNativeSourceLink(node, blockId);
+      }
+      node.addEventListener("click", () => requestSourceMap(node.dataset.blockId));
+      node.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          requestSourceMap(node.dataset.blockId);
         }
       });
     });
 
-    root.querySelectorAll(".bookmd-figure img, .bookmd-table img").forEach((image) => {
+    root.querySelectorAll(".bookmd-figure img, .bookmd-formula img, .bookmd-table img").forEach((image) => {
+      if (image.dataset.mediaEventsBound === "true") return;
+      image.dataset.mediaEventsBound = "true";
       image.addEventListener("click", () => {
         if (window.AndroidBookMD) {
           window.AndroidBookMD.onImageSelected(image.getAttribute("src"));
@@ -197,12 +238,143 @@
     });
   }
 
+  function bindRootSourceMapEvents(root) {
+    if (root.dataset.sourceMapEventsBound === "true") return;
+    root.dataset.sourceMapEventsBound = "true";
+
+    root.addEventListener("click", (event) => {
+      const target = event.target && event.target.closest ? event.target : null;
+      const block = target ? target.closest("[data-block-id]") : null;
+      if (block && block.dataset.blockId) requestSourceMap(block.dataset.blockId);
+    });
+
+    root.addEventListener("touchend", (event) => {
+      const touch = event.changedTouches && event.changedTouches[0];
+      if (!touch) return;
+      if (Math.abs(touch.clientX - touchStartX) > 12 || Math.abs(touch.clientY - touchStartY) > 12) return;
+      const target = document.elementFromPoint(touch.clientX, touch.clientY);
+      const block = target && target.closest ? target.closest("[data-block-id]") : null;
+      if (block && block.dataset.blockId) requestSourceMap(block.dataset.blockId);
+    }, { passive: true });
+  }
+
+  function requestSourceMap(blockId) {
+    if (window.AndroidBookMD && blockId && window.AndroidBookMD.onSourceMapRequested) {
+      window.AndroidBookMD.onSourceMapRequested(blockId);
+    } else if (window.AndroidBookMD && blockId) {
+      window.AndroidBookMD.onBlockSelected(blockId);
+    }
+  }
+
+  function installNativeSourceLink(node, blockId) {
+    if (!currentConfig.native_source_links) return;
+    if (node.querySelector(":scope > .bookmd-source-link-overlay")) return;
+    const link = document.createElement("a");
+    link.className = "bookmd-source-link-overlay";
+    link.href = `bookmd-source://${encodeURIComponent(blockId)}`;
+    link.setAttribute("aria-label", `source block ${blockId}`);
+    node.appendChild(link);
+  }
+
+  function isPagedLayout() {
+    const root = document.getElementById("bookmd-content");
+    return root.dataset.layout === "paged";
+  }
+
+  function pageStep() {
+    const root = document.getElementById("bookmd-content");
+    const style = window.getComputedStyle(root);
+    const gap = Number.parseFloat(style.columnGap || "0") || 0;
+    return Math.max(1, root.clientWidth + gap);
+  }
+
+  function setupPagination() {
+    const root = document.getElementById("bookmd-content");
+    if (!root.dataset.paginationBound) {
+      root.dataset.paginationBound = "true";
+      root.addEventListener("scroll", scheduleProgressReport, { passive: true });
+      root.addEventListener("touchstart", onTouchStart, { passive: true });
+      root.addEventListener("touchend", onTouchEnd, { passive: true });
+      window.addEventListener("resize", schedulePaginationRefresh);
+    }
+    refreshPagination();
+  }
+
+  function schedulePaginationRefresh() {
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => {
+      refreshPagination();
+      reportProgress();
+    }, 150);
+  }
+
+  function refreshPagination() {
+    const root = document.getElementById("bookmd-content");
+    if (!isPagedLayout()) {
+      pageState.pageIndex = 0;
+      pageState.pageCount = 1;
+      root.dataset.pageNumber = "1";
+      root.dataset.pageCount = "1";
+      return;
+    }
+    const step = pageStep();
+    pageState.pageCount = Math.max(1, Math.ceil(root.scrollWidth / step));
+    pageState.pageIndex = clamp(Math.round(root.scrollLeft / step), 0, pageState.pageCount - 1);
+    root.dataset.pageNumber = String(pageState.pageIndex + 1);
+    root.dataset.pageCount = String(pageState.pageCount);
+  }
+
+  function goToPage(pageIndex, behavior) {
+    const root = document.getElementById("bookmd-content");
+    refreshPagination();
+    const target = clamp(pageIndex, 0, pageState.pageCount - 1);
+    pageState.pageIndex = target;
+    root.scrollTo({
+      left: target * pageStep(),
+      top: 0,
+      behavior: behavior || "smooth",
+    });
+    refreshPagination();
+    reportProgress();
+    return target;
+  }
+
+  function nextPage() {
+    return goToPage(pageState.pageIndex + 1);
+  }
+
+  function previousPage() {
+    return goToPage(pageState.pageIndex - 1);
+  }
+
+  function onTouchStart(event) {
+    const touch = event.changedTouches && event.changedTouches[0];
+    if (!touch) return;
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+  }
+
+  function onTouchEnd(event) {
+    if (!isPagedLayout()) return;
+    const touch = event.changedTouches && event.changedTouches[0];
+    if (!touch) return;
+    const dx = touch.clientX - touchStartX;
+    const dy = touch.clientY - touchStartY;
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy)) return;
+    if (dx < 0) {
+      nextPage();
+    } else {
+      previousPage();
+    }
+  }
+
   function jumpToBlock(blockId) {
     const selector = `[data-block-id="${cssEscape(blockId)}"]`;
     const node = document.querySelector(selector);
     if (!node) return false;
     node.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
     node.classList.add("bookmd-current-block");
+    refreshPagination();
     return true;
   }
 
@@ -211,7 +383,9 @@
     let bestDistance = Number.POSITIVE_INFINITY;
     document.querySelectorAll(".bookmd-block[data-block-id]").forEach((node) => {
       const rect = node.getBoundingClientRect();
-      const distance = Math.abs(rect.top);
+      const distance = isPagedLayout()
+        ? Math.abs(rect.left) + Math.abs(rect.top)
+        : Math.abs(rect.top);
       if (distance < bestDistance) {
         best = node.dataset.blockId || "";
         bestDistance = distance;
@@ -221,14 +395,43 @@
   }
 
   function currentProgress() {
+    refreshPagination();
+    const root = document.getElementById("bookmd-content");
     return {
+      scroll_x: root.scrollLeft || window.scrollX || 0,
       scroll_y: window.scrollY || 0,
+      page_index: pageState.pageIndex,
+      page_count: pageState.pageCount,
       block_id: nearestVisibleBlockId(),
     };
   }
 
+  function reportProgress() {
+    if (!window.AndroidBookMD || !window.AndroidBookMD.onReadingProgressChanged) return;
+    const progress = currentProgress();
+    if (window.AndroidBookMD.onReadingProgressChangedPayload) {
+      window.AndroidBookMD.onReadingProgressChangedPayload(JSON.stringify(progress));
+    } else {
+      window.AndroidBookMD.onReadingProgressChanged(progress.block_id || "", progress.scroll_y || 0);
+    }
+  }
+
+  function scheduleProgressReport() {
+    window.clearTimeout(progressReportTimer);
+    progressReportTimer = window.setTimeout(reportProgress, 300);
+  }
+
   function restoreProgress(progress) {
     if (progress && progress.block_id && jumpToBlock(progress.block_id)) return true;
+    if (isPagedLayout() && progress && Number.isFinite(progress.page_index)) {
+      goToPage(progress.page_index, "auto");
+      return true;
+    }
+    if (isPagedLayout() && progress && Number.isFinite(progress.scroll_x)) {
+      document.getElementById("bookmd-content").scrollTo({ left: progress.scroll_x, top: 0, behavior: "auto" });
+      refreshPagination();
+      return true;
+    }
     if (progress && Number.isFinite(progress.scroll_y)) {
       window.scrollTo(0, progress.scroll_y);
       return true;
@@ -246,17 +449,27 @@
       if (index < 0) return;
       const blockId = node.dataset.blockId || "";
       results.push({ block_id: blockId, text });
+      if (!node.dataset.originalHtml) {
+        node.dataset.originalHtml = node.innerHTML;
+      }
       node.innerHTML = highlightText(text, query);
     });
+    bindBlockEvents(document.getElementById("bookmd-content"));
     return results;
   }
 
   function clearSearchHighlights() {
-    document.querySelectorAll(".bookmd-search-hit").forEach((node) => {
-      const parent = node.parentElement;
-      if (!parent) return;
-      parent.replaceChildren(document.createTextNode(parent.textContent || ""));
+    document.querySelectorAll(".bookmd-block[data-original-html]").forEach((node) => {
+      node.innerHTML = node.dataset.originalHtml;
+      delete node.dataset.originalHtml;
     });
+    bindBlockEvents(document.getElementById("bookmd-content"));
+  }
+
+  function blockIdAtPoint(x, y) {
+    const target = document.elementFromPoint(x, y);
+    const block = target && target.closest ? target.closest("[data-block-id]") : null;
+    return block && block.dataset.blockId ? block.dataset.blockId : "";
   }
 
   function highlightText(text, query) {
@@ -277,6 +490,10 @@
     return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  }
+
   function slugify(value) {
     return String(value)
       .trim()
@@ -290,9 +507,20 @@
     applyConfig,
     renderMarkdown,
     jumpToBlock,
+    nextPage,
+    previousPage,
+    goToPage,
     searchInChapter,
     clearSearchHighlights,
+    blockIdAtPoint,
     currentProgress,
+    reportProgress,
     restoreProgress,
+    setupPagination,
   };
+
+  window.addEventListener("scroll", scheduleProgressReport, { passive: true });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") reportProgress();
+  });
 })();

@@ -9,6 +9,7 @@ from translator_core import (
     TranslationCacheStore,
     TranslationBlock,
 )
+import translator_core.deepseek as deepseek_module
 
 
 def test_noop_translator_preserves_block_alignment():
@@ -79,6 +80,36 @@ def test_deepseek_translator_rejects_missing_block_ids():
             [TranslationBlock(block_id="b1", text="Voltage source inverter")],
             target_lang="zh",
         )
+
+
+def test_deepseek_http_transport_sends_json_accept_and_user_agent(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self):
+            return b'{"choices":[{"message":{"content":"{\\"blocks\\":[]}"}}]}'
+
+    def fake_urlopen(http_request, timeout):
+        captured["headers"] = dict(http_request.header_items())
+        captured["timeout"] = timeout
+        return FakeResponse()
+
+    monkeypatch.setattr(deepseek_module.request, "urlopen", fake_urlopen)
+
+    deepseek_module._http_transport(
+        {"messages": [], "model": "deepseek-test"},
+        DeepSeekConfig(api_key="test-key", timeout=12),
+    )
+
+    assert captured["headers"]["Accept"] == "application/json"
+    assert captured["headers"]["User-agent"] == "pdf2md-converter/0.1"
+    assert captured["timeout"] == 12
 
 
 def test_translation_cache_store_round_trips_records(tmp_path):

@@ -1,0 +1,37 @@
+{
+  "schema": "bookmd_benchmark_manifest_v1",
+  "samples": [
+    {
+      "id": "dc_dc_textbook",
+      "label": "DC-DC converter textbook",
+      "document_type": "power_electronics_textbook",
+      "status": "ready",
+      "bookmd": "tmp/real_book_full_clean_text_visual.bookmd",
+      "notes": "Real technical-book sample with cover, formulas, figures, source map, and generated visual assets."
+    },
+    {
+      "id": "scanned_low_quality",
+      "label": "Scanned low-quality PDF",
+      "document_type": "scanned_low_quality_pdf",
+      "status": "ready",
+      "bookmd": "tmp/boundary_lcl_scan_p1_6_visual.bookmd",
+      "notes": "Chinese scanned/low-quality boundary sample rebuilt with cover and visual asset preservation enabled."
+    },
+    {
+      "id": "formula_paper",
+      "label": "Formula-heavy paper",
+      "document_type": "formula_heavy_paper",
+      "status": "ready",
+      "bookmd": "tmp/boundary_bleu_acl2002_visual.bookmd",
+      "notes": "Paper-style boundary sample rebuilt with cover and visual asset preservation enabled."
+    },
+    {
+      "id": "table_manual",
+      "label": "Table-heavy manual",
+      "document_type": "table_heavy_manual",
+      "status": "pending",
+      "bookmd": "tmp/benchmarks/table_manual.bookmd",
+      "notes": "Add after selecting a manual or datasheet with dense tables."
+    }
+  ]
+}

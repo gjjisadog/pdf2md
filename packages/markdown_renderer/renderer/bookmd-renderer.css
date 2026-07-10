@@ -14,6 +14,14 @@ body {
   font-family: "Noto Serif SC", "Source Han Serif SC", serif;
 }
 
+body[data-bookmd-layout="paged"] {
+  overflow: hidden;
+}
+
+body[data-bookmd-layout="scroll"] {
+  overflow-y: auto;
+}
+
 .bookmd-content {
   box-sizing: border-box;
   min-height: 100vh;
@@ -34,11 +42,33 @@ body {
 }
 
 .bookmd-content[data-layout="paged"] {
+  position: relative;
+  height: 100vh;
+  overflow-x: auto;
+  overflow-y: hidden;
+  column-width: calc(100vw - 40px);
   column-gap: 36px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
 }
 
 .bookmd-content[data-layout="scroll"] {
   column-count: auto;
+  height: auto;
+  overflow: visible;
+}
+
+.bookmd-content[data-layout="paged"]::after {
+  content: attr(data-page-number) " / " attr(data-page-count);
+  position: fixed;
+  right: 16px;
+  bottom: 10px;
+  z-index: 2;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bookmd-bg), var(--bookmd-text) 8%);
+  color: var(--bookmd-muted);
+  font-size: 0.78rem;
 }
 
 .bookmd-content[data-language-mode="en"] .bookmd-bilingual > div:first-child {
@@ -50,7 +80,18 @@ body {
 }
 
 .bookmd-block {
+  position: relative;
   break-inside: avoid;
+}
+
+.bookmd-source-link-overlay {
+  position: absolute;
+  inset: -4px;
+  z-index: 1;
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 4px;
 }
 
 .bookmd-figure,
@@ -66,17 +107,34 @@ body {
 .bookmd-table img {
   display: block;
   max-width: 100%;
+  max-height: 72vh;
   height: auto;
   margin: 0 auto;
+  object-fit: contain;
 }
 
 .bookmd-table {
   overflow-x: auto;
 }
 
+.bookmd-media-frame {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bookmd-formula .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.25rem;
+  -webkit-overflow-scrolling: touch;
+}
+
 .bookmd-table-scroll {
   overflow-x: auto;
   margin: 1rem 0;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .bookmd-table-scroll table {

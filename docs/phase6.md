@@ -93,8 +93,12 @@ ANDROID_HOME=/tmp/bookmd-android-sdk ANDROID_SDK_ROOT=/tmp/bookmd-android-sdk JA
 
 Results:
 
-- `python -m pytest`: 49 passed.
-- `python scripts/verify_release.py`: passed; Android build is skipped when SDK env vars are absent.
+- `python -m pytest`: latest full local run passed with 106 tests.
+- `python scripts/verify_release.py`: release path is covered by the release verifier and focused release-script tests.
+- `python scripts/verify_android_reader.py`: Android renderer/static checks passed and debug APK build was successful.
+- `ANDROID_HOME=/tmp/bookmd-android-sdk ANDROID_SDK_ROOT=/tmp/bookmd-android-sdk python scripts/verify_android_reader.py --device-smoke --bookmd tmp/real_pdf_boundary/pdfkit_assets_check/formula_svpwm_assets.bookmd --search-term SVPWM --artifacts-dir tmp/android_reader_verify`: passed on `emulator-5554`, covering shelf open, reader open, search jump, source-map dialog, and original PDF page open.
+- `ANDROID_HOME=/tmp/bookmd-android-sdk ANDROID_SDK_ROOT=/tmp/bookmd-android-sdk python scripts/verify_android_reader.py --device-smoke --bookmd tmp/real_pdf_boundary/formula_svpwm/formula_svpwm.bookmd --import-via-picker --artifacts-dir tmp/android_reader_verify_picker`: passed on `emulator-5554`, covering Android DocumentsUI file-picker import before continuing through the reader/source-map/PDF-page smoke.
+- `ANDROID_HOME=/tmp/bookmd-android-sdk ANDROID_SDK_ROOT=/tmp/bookmd-android-sdk python scripts/verify_android_reader.py --device-smoke --bookmd tmp/real_pdf_boundary/formula_svpwm/formula_svpwm.bookmd --verify-progress --artifacts-dir tmp/android_reader_verify_progress`: passed on `emulator-5554`, covering reading progress persistence, app force-stop, shelf reopen, and direct restore into the reader before continuing to source-map/PDF-page smoke.
 - Android debug APK: BUILD SUCCESSFUL with local SDK/JDK paths.
 
 APK path:
@@ -103,4 +107,4 @@ APK path:
 apps/reader-android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Manual acceptance remains documented in `docs/release_checklist.md` for device/emulator import and reading checks.
+Remaining manual acceptance remains documented in `docs/release_checklist.md` for settings and media viewer checks.

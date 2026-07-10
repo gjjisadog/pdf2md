@@ -41,7 +41,15 @@ Required OCR output:
 ocr_output/
   result.md
   result.json
+  source_map.json
+  parse.log
   assets/
+```
+
+Validate OCR output files before building:
+
+```bash
+python -m converter validate-ocr "D:/books/ocr_output/test"
 ```
 
 The converter does not deploy local OCR models and does not install Paddle-related tooling. It can optionally call an external generic HTTP OCR API.
@@ -59,6 +67,12 @@ Check the Tailscale OCR service before uploading a file:
 
 ```bash
 python -m converter ocr-health
+```
+
+For quick diagnostics when the service may be down or unreachable, use a short timeout:
+
+```bash
+python -m converter ocr-health --timeout 5
 ```
 
 Run OCR only:

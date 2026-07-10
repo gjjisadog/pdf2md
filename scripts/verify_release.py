@@ -36,6 +36,8 @@ def main() -> int:
             _sample_output_path(),
         ],
         [sys.executable, "-m", "pytest", "tests/test_renderer_assets.py"],
+        [sys.executable, "scripts/verify_android_reader.py"],
+        [sys.executable, "apps/reader-ios/scripts/verify_ios_release.py"],
     ]
 
     # Human-readable command markers kept literal for docs/tests:
@@ -43,6 +45,8 @@ def main() -> int:
     # python -m pytest tests/test_ocr_client.py tests/test_converter_ocr_cli.py
     # python -m converter build ... && python -m converter validate ...
     # cd apps/reader-android && ./gradlew assembleDebug
+    # Android verifier resolves ANDROID_HOME / ANDROID_SDK_ROOT.
+    # cd apps/reader-ios && python3 scripts/verify_ios_release.py
     with tempfile.TemporaryDirectory(prefix="bookmd-release-") as temp_name:
         os.environ["BOOKMD_RELEASE_TEMP"] = temp_name
         for command in checks:
@@ -54,14 +58,6 @@ def main() -> int:
             ]
             if _run(command, cwd=ROOT) != 0:
                 return 1
-
-    android_home = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
-    if android_home:
-        gradlew = ROOT / "apps/reader-android/gradlew"
-        if _run([str(gradlew), "assembleDebug"], cwd=ROOT / "apps/reader-android") != 0:
-            return 1
-    else:
-        print("Skipping Android assembleDebug: ANDROID_HOME is not set")
 
     print("Release verification passed")
     return 0
