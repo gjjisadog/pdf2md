@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bookmd.local/schema/1.0/reading_config.json",
+  "type": "object",
+  "required": ["default_mode", "layout", "font_size", "line_height", "theme", "paragraph_indent"],
+  "properties": {
+    "default_mode": {"type": "string", "minLength": 1},
+    "layout": {"type": "string", "minLength": 1},
+    "font_size": {"type": "number", "exclusiveMinimum": 0},
+    "line_height": {"type": "number", "exclusiveMinimum": 0},
+    "theme": {"type": "string", "minLength": 1},
+    "paragraph_indent": {"type": "boolean"}
+  },
+  "additionalProperties": true
+}

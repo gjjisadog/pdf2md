@@ -1,0 +1,17 @@
+{
+  "provider": "",
+  "model": "",
+  "target_lang": "en",
+  "blocks": [
+    {
+      "block_id": "b1",
+      "source_text": "Figure",
+      "translated_text": "",
+      "provider": "",
+      "model": "",
+      "status": "source",
+      "cache_key": "",
+      "error": ""
+    }
+  ]
+}

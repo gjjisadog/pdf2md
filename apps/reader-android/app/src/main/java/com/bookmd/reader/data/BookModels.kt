@@ -10,5 +10,6 @@ data class BookChapter(
 data class BookManifest(
     val bookId: String,
     val title: String,
+    val formatVersion: String?,
     val chapters: List<BookChapter>,
 )

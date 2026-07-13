@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any
 
 from bookmd_core import package_directory, validate_bookmd
+from bookmd_core.visuals import crop_image as _portable_crop_image
+from bookmd_core.visuals import render_pdf_page as _portable_render_pdf_page
 from source_map_core import OcrBlock, build_source_map, normalize_blocks
 from translator_core import (
     DeepSeekConfig,
@@ -132,7 +134,7 @@ def build_bookmd(options: BuildOptions) -> Path:
         _write_book_directory(staging, options, data, blocks, chapters)
         package_directory(staging, options.output)
 
-    validation = validate_bookmd(options.output)
+    validation = validate_bookmd(options.output, strict=True)
     if not validation.valid:
         raise ConverterError("; ".join(validation.errors))
     return options.output
@@ -400,10 +402,16 @@ def _crop_pdf_block_with_pdfkit(
 
 
 def _render_pdf_page_image(source_pdf: Path, page: int, work_dir: Path) -> Path | None:
+    work_dir.mkdir(parents=True, exist_ok=True)
+    portable_output = work_dir / f"page_{page:03d}.png"
+    try:
+        return _portable_render_pdf_page(source_pdf, page, portable_output, scale=2.0)
+    except (OSError, RuntimeError, ValueError):
+        pass
+
     pdftoppm = shutil.which("pdftoppm")
     if not pdftoppm:
         return None
-    work_dir.mkdir(parents=True, exist_ok=True)
     prefix = work_dir / f"page_{page:03d}"
     try:
         completed = subprocess.run(
@@ -434,6 +442,9 @@ def _render_pdf_page_image(source_pdf: Path, page: int, work_dir: Path) -> Path 
 
 
 def _crop_page_image(page_image: Path, bbox: list[float], output_path: Path) -> bool:
+    if _portable_crop_image(page_image, bbox, output_path):
+        return True
+
     sips = shutil.which("sips")
     if not sips:
         return False
@@ -544,6 +555,7 @@ def _book_manifest(
     metadata = ocr_data.get("metadata") if isinstance(ocr_data.get("metadata"), dict) else {}
     title = metadata.get("title") or (chapters[0].title if chapters else "Untitled Book")
     return {
+        "format_version": "1.0",
         "book_id": str(uuid.uuid5(uuid.NAMESPACE_URL, str(options.source_pdf.resolve()))),
         "title": title or "Untitled Book",
         "author": metadata.get("author") or "",
@@ -553,7 +565,7 @@ def _book_manifest(
             options.source_pdf.stat().st_mtime,
             tz=timezone.utc,
         ).isoformat(),
-        "version": "0.1",
+        "version": "1.0",
         "chapters": [
             {
                 "id": chapter.chapter_id,

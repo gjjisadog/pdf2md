@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "block_id": "unknown",
+      "chapter_id": "missing_chapter",
+      "chapter_path": "chapters/missing.md",
+      "chapter_title": "Missing",
+      "type": "paragraph",
+      "text": "Dangling"
+    }
+  ]
+}

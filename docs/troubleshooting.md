@@ -49,10 +49,10 @@ Set a new `translation.cache_path` in config or delete the JSONL cache file. Cac
 Run:
 
 ```bash
-python -m converter validate path/to/book.bookmd
+python -m converter validate path/to/book.bookmd --strict
 ```
 
-The command reports missing required files.
+The strict command reports schema errors, unsafe/duplicate ZIP entries, dangling cross-file references, and missing visual assets. Legacy 0.1 packages remain readable and emit a migration warning.
 
 ## Android build tool not found
 

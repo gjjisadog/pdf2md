@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "block_id": "b1",
+      "chapter_id": "ch_001",
+      "chapter_path": "chapters/001_chapter_1.md",
+      "chapter_title": "Chapter One",
+      "type": "figure",
+      "text": "Figure"
+    }
+  ]
+}

@@ -57,10 +57,16 @@ def main(argv: list[str] | None = None) -> int:
 
     validate_parser = subparsers.add_parser("validate")
     validate_parser.add_argument("bookmd")
+    validate_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="validate BookMD 1.0 schemas, archive safety, and cross-file references",
+    )
 
     quality_parser = subparsers.add_parser("quality-report")
     quality_parser.add_argument("bookmd")
     quality_parser.add_argument("--format", choices=["json", "markdown"], default="markdown")
+    quality_parser.add_argument("--strict", action="store_true")
 
     validate_ocr_parser = subparsers.add_parser("validate-ocr")
     validate_ocr_parser.add_argument("ocr_output")
@@ -89,15 +95,17 @@ def main(argv: list[str] | None = None) -> int:
             _print_build_summary(output)
             return 0
         if args.command == "validate":
-            result = validate_bookmd(Path(args.bookmd))
+            result = validate_bookmd(Path(args.bookmd), strict=args.strict)
             if result.valid:
                 print(f"Valid BookMD: {args.bookmd}")
+                for warning in result.warnings:
+                    print(f"WARNING: {warning}")
                 return 0
             for error in result.errors:
                 print(f"ERROR: {error}")
             return 1
         if args.command == "quality-report":
-            report = inspect_bookmd(Path(args.bookmd))
+            report = inspect_bookmd(Path(args.bookmd), strict=args.strict)
             if args.format == "json":
                 print(render_quality_report_json(report))
             else:

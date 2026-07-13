@@ -108,6 +108,8 @@ def test_android_repository_models_manifest_and_chapters():
 
     assert "data class BookManifest" in model
     assert "data class BookChapter" in model
+    assert "formatVersion: String?" in model
+    assert 'optString("format_version")' in repo
     assert "readManifest" in repo
     assert "readChapterMarkdown" in repo
 

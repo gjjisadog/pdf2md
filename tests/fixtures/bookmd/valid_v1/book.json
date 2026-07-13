@@ -1,0 +1,18 @@
+{
+  "format_version": "1.0",
+  "book_id": "fixture-v1",
+  "title": "BookMD Fixture",
+  "author": "Test Author",
+  "source_pdf": "fixture.pdf",
+  "language": "en",
+  "created_at": "2026-07-13T00:00:00+00:00",
+  "version": "1.0",
+  "chapters": [
+    {
+      "id": "ch_001",
+      "title": "Chapter One",
+      "path": "chapters/001_chapter_1.md",
+      "order": 1
+    }
+  ]
+}

@@ -191,6 +191,7 @@ class BookRepository(private val rootDir: File) {
         return BookManifest(
             bookId = json.optString("book_id"),
             title = json.optString("title"),
+            formatVersion = json.optString("format_version").takeIf { it.isNotBlank() },
             chapters = chapters,
         )
     }

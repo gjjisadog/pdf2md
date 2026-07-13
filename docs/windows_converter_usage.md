@@ -5,7 +5,7 @@ Run from the repository root.
 ```bash
 python -m pytest
 python -m converter build --source-pdf samples/ocr_output_sample/original.pdf --ocr-output samples/ocr_output_sample --output samples/bookmd_sample/sample.bookmd --translate false
-python -m converter validate samples/bookmd_sample/sample.bookmd
+python -m converter validate samples/bookmd_sample/sample.bookmd --strict
 ```
 
 With config:
@@ -53,6 +53,8 @@ python -m converter validate-ocr "D:/books/ocr_output/test"
 ```
 
 The converter does not deploy local OCR models and does not install Paddle-related tooling. It can optionally call an external generic HTTP OCR API.
+
+封面和 figure/formula/table 图块资产由内置 PDFium + Pillow 后端生成，Windows 不需要安装 Swift、Poppler/`pdftoppm` 或 macOS `sips`。这些系统工具仅作为旧环境的 fallback。
 
 Generic OCR API environment:
 

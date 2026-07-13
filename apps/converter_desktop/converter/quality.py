@@ -46,9 +46,13 @@ class BookMdQualityReport:
         return asdict(self)
 
 
-def inspect_bookmd(path: str | PurePosixPath) -> BookMdQualityReport:
+def inspect_bookmd(
+    path: str | PurePosixPath,
+    *,
+    strict: bool = False,
+) -> BookMdQualityReport:
     archive_path = str(path)
-    validation = validate_bookmd(archive_path)
+    validation = validate_bookmd(archive_path, strict=strict)
     warnings = list(validation.warnings)
     errors = list(validation.errors)
     title = ""

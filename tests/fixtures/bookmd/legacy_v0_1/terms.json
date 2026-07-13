@@ -1,0 +1,9 @@
+{
+  "terms": [
+    {
+      "source": "PWM",
+      "target": "脉宽调制",
+      "kind": "abbreviation"
+    }
+  ]
+}

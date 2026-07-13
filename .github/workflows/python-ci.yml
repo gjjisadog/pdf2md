@@ -1,0 +1,57 @@
+name: Python CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  package-and-test:
+    name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install build and test tools
+        run: python -m pip install --upgrade pip build pytest
+      - name: Build wheel
+        run: python -m build --wheel
+      - name: Install wheel into the runner environment
+        run: >-
+          python -c "import glob,subprocess,sys; wheels=glob.glob('dist/*.whl'); assert wheels, 'wheel was not built'; subprocess.check_call([sys.executable,'-m','pip','install','--force-reinstall',wheels[0]])"
+      - name: Smoke-test installed package outside source imports
+        run: >-
+          python -c "import bookmd_core,converter; print(bookmd_core.__file__); print(converter.__file__)"
+      - name: Smoke-test CLI
+        run: bookmd --help
+      - name: Run test suite
+        run: python -m pytest -q
+
+  windows-visual-assets:
+    name: Windows real cover and block assets
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+      - name: Install package and test tools
+        run: python -m pip install ".[dev]"
+      - name: Render real PDF cover and visual block assets
+        run: python -m pytest tests/test_portable_visuals.py -q

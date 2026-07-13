@@ -34,6 +34,7 @@ def main() -> int:
             "converter",
             "validate",
             _sample_output_path(),
+            "--strict",
         ],
         [sys.executable, "-m", "pytest", "tests/test_renderer_assets.py"],
         [sys.executable, "scripts/verify_android_reader.py"],
@@ -43,7 +44,7 @@ def main() -> int:
     # Human-readable command markers kept literal for docs/tests:
     # python -m pytest
     # python -m pytest tests/test_ocr_client.py tests/test_converter_ocr_cli.py
-    # python -m converter build ... && python -m converter validate ...
+    # python -m converter build ... && python -m converter validate ... --strict
     # cd apps/reader-android && ./gradlew assembleDebug
     # Android verifier resolves ANDROID_HOME / ANDROID_SDK_ROOT.
     # cd apps/reader-ios && python3 scripts/verify_ios_release.py

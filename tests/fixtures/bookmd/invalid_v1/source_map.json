@@ -1,0 +1,24 @@
+{
+  "blocks": [
+    {
+      "block_id": "duplicate",
+      "chapter_id": "ch_001",
+      "markdown_path": "chapters/001_chapter_1.md",
+      "source_page": 1,
+      "bbox": [10, 10, 100, 100],
+      "source_text": "Figure",
+      "translated_text": "",
+      "type": "figure"
+    },
+    {
+      "block_id": "duplicate",
+      "chapter_id": "ch_001",
+      "markdown_path": "chapters/001_chapter_1.md",
+      "source_page": 1,
+      "bbox": [10, 10, 100, 100],
+      "source_text": "Duplicate",
+      "translated_text": "",
+      "type": "figure"
+    }
+  ]
+}

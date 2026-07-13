@@ -3,6 +3,7 @@ import Foundation
 public struct BookManifest: Codable, Equatable, Sendable {
     public let bookId: String
     public let title: String
+    public let formatVersion: String?
     public let author: String?
     public let sourcePDF: String?
     public let language: String?
@@ -13,6 +14,7 @@ public struct BookManifest: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case bookId = "book_id"
         case title
+        case formatVersion = "format_version"
         case author
         case sourcePDF = "source_pdf"
         case language

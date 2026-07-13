@@ -8,7 +8,9 @@ Use this checklist before treating the personal MVP as a releasable local build.
 - OCR API adapter tests: `python -m pytest tests/test_ocr_client.py tests/test_converter_ocr_cli.py`
 - Release verifier: `python scripts/verify_release.py`
 - Sample package: build `samples/ocr_output_sample` into a temporary `.bookmd`
-- Package validation: `python -m converter validate path/to/sample.bookmd`
+- Package validation: `python -m converter validate path/to/sample.bookmd --strict`
+- Wheel isolation: `python -m build --wheel`, install the wheel in a clean environment, then run `bookmd --help`
+- Cross-platform visual assets: `python -m pytest tests/test_portable_visuals.py -q` (also required on `windows-latest` CI)
 - BookMD benchmark report: `python scripts/run_bookmd_benchmarks.py --manifest docs/bookmd_benchmarks.json --output tmp/bookmd_benchmark_report.json`
 - Real-book quality report: `python -m converter quality-report tmp/real_book_full_clean_text_visual.bookmd --format json`
 - Renderer parity: `python -m pytest tests/test_renderer_assets.py`
@@ -45,7 +47,7 @@ Use this sequence for a real personal technical-book conversion after OCR batche
 
 ```bash
 python -m converter build --source-pdf <source.pdf> --ocr-output <ocr-output-dir> --output <book.bookmd> --translate false --generate-block-assets true
-python -m converter validate <book.bookmd>
+python -m converter validate <book.bookmd> --strict
 python -m converter quality-report <book.bookmd> --format json
 python scripts/verify_android_reader.py --device-smoke --bookmd <book.bookmd> --verify-visual-asset --search-term <known-term>
 ```

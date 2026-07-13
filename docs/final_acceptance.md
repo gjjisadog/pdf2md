@@ -2,6 +2,9 @@
 
 | Requirement | Evidence | Status |
 | --- | --- | --- |
+| Installable Python package outside the repository checkout | `python -m build --wheel`; clean virtualenv installs the wheel and imports `bookmd_core`/`converter`; `bookmd --help` succeeds; `.github/workflows/python-ci.yml` repeats this on Ubuntu, Windows, and macOS | Verified locally; CI configured |
+| BookMD 1.0 schema and compatibility policy | `schemas/bookmd/v1/*.schema.json`; `tests/test_bookmd_schema.py`; `tests/test_bookmd_compatibility.py`; strict mode rejects unknown major versions and unsafe/dangling references while legacy 0.1 fixtures pass with warnings | Verified locally |
+| Cross-platform cover and block asset generation | `packages/bookmd_core/bookmd_core/visuals.py`; `tests/test_portable_visuals.py` renders a real PDF cover and figure with PDFium/Pillow while masking host tools; dedicated `windows-visual-assets` CI job runs the same test | Verified locally; Windows CI configured |
 | Build `.bookmd` from OCR output | `python -m converter build --source-pdf samples/ocr_output_sample/original.pdf --ocr-output samples/ocr_output_sample --output ... --translate false` | Verified by release script |
 | Validate `.bookmd` structure | `python -m converter validate ...` | Verified by release script |
 | Preserve source map and search index | `tests/test_sample_e2e.py` | Verified |

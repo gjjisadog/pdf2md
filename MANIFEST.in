@@ -2,10 +2,11 @@ include AGENTS.md
 include README.md
 include pyproject.toml
 recursive-include apps/converter_desktop/converter *.py
-recursive-include packages/bookmd_core/bookmd_core *.py *.json
+recursive-include packages/bookmd_core/bookmd_core *.py
 recursive-include packages/source_map_core/source_map_core *.py
 recursive-include packages/translator_core/translator_core *.py
 recursive-include packages/ocr_client/ocr_client *.py
+recursive-include schemas/bookmd/v1 *.json
 prune apps/reader-android
 prune apps/reader-ios
 prune docs
