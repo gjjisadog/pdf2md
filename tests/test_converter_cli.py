@@ -266,3 +266,46 @@ def test_cli_validate_ocr_reports_invalid_source_map_page(tmp_path, capsys):
     output = capsys.readouterr().out
     assert exit_code == 1
     assert "ERROR: source_map blocks do not align with OCR blocks" in output
+
+
+def test_cli_validation_commands_default_to_strict_for_v1(tmp_path, capsys):
+    root = tmp_path / "v1"
+    (root / "chapters").mkdir(parents=True)
+    (root / "book.json").write_text(
+        json.dumps(
+            {
+                "format_version": "1.0",
+                "book_id": "book",
+                "title": "Invalid v1",
+                "author": "",
+                "source_pdf": "source.pdf",
+                "language": "en",
+                "created_at": "2026-07-14T00:00:00+00:00",
+                "version": "1.0",
+                "chapters": [
+                    {"id": "chapter-1", "title": "Chapter", "path": "chapters/001.md", "order": 1}
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / "chapters" / "001.md").write_text("# Chapter\n", encoding="utf-8")
+    for name in [
+        "source_map.json",
+        "terms.json",
+        "translation.json",
+        "reading_config.json",
+        "search_index.json",
+    ]:
+        (root / name).write_text("{}", encoding="utf-8")
+    bookmd = package_directory(root, tmp_path / "invalid-v1.bookmd")
+
+    validate_exit = cli.main(["validate", str(bookmd)])
+    validate_output = capsys.readouterr().out
+    quality_exit = cli.main(["quality-report", str(bookmd), "--format", "json"])
+    quality_output = json.loads(capsys.readouterr().out)
+
+    assert validate_exit == 1
+    assert "ERROR:" in validate_output
+    assert quality_exit == 1
+    assert quality_output["valid"] is False

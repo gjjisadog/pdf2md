@@ -2,11 +2,11 @@
 
 | Requirement | Evidence | Status |
 | --- | --- | --- |
-| Installable Python package outside the repository checkout | `python -m build --wheel`; clean virtualenv installs the wheel and imports `bookmd_core`/`converter`; `bookmd --help` succeeds; `.github/workflows/python-ci.yml` repeats this on Ubuntu, Windows, and macOS | Verified locally; CI configured |
+| Installable Python package outside the repository checkout | `python -m build --wheel`; clean virtualenv installs the wheel and imports `bookmd_core`/`converter`; `bookmd --help` succeeds; `.github/workflows/python-ci.yml` repeats this on Ubuntu, Windows, and macOS | Verified locally; CI run 2 pending runner |
 | BookMD 1.0 schema and compatibility policy | `schemas/bookmd/v1/*.schema.json`; `tests/test_bookmd_schema.py`; `tests/test_bookmd_compatibility.py`; strict mode rejects unknown major versions and unsafe/dangling references while legacy 0.1 fixtures pass with warnings | Verified locally |
-| Cross-platform cover, block, and batch PDF backend | `apps/converter_desktop/converter/pdf_backend.py`; `tests/test_pdf_backend.py` covers real page count, split, render, non-white crop, invalid bbox, and OCR batch routing; `tests/test_portable_visuals.py` renders a real PDF cover and figure while masking host tools; dedicated `windows-visual-assets` CI job runs the same tests and strict sample build | Verified locally; Windows CI configured |
+| Cross-platform cover, block, and batch PDF backend | `apps/converter_desktop/converter/pdf_backend.py`; `tests/test_pdf_backend.py` covers real page count, split, render, non-white crop, invalid bbox, and OCR batch routing; `tests/test_portable_visuals.py` renders a real PDF cover and figure while masking host tools; dedicated `windows-visual-assets` CI job runs the same tests and strict sample build | Verified locally; Windows CI run 2 pending runner |
 | Build `.bookmd` from OCR output | `python -m converter build --source-pdf samples/ocr_output_sample/original.pdf --ocr-output samples/ocr_output_sample --output ... --translate false` | Verified by release script |
-| Validate `.bookmd` structure | `python -m converter validate ... --strict` | Verified by release script |
+| Validate `.bookmd` structure | `python -m converter validate ...` (strict by default) | Verified by release script |
 | Preserve source map and search index | `tests/test_sample_e2e.py` | Verified |
 | DeepSeek client is mockable | `tests/test_translator_core.py` fake transport | Verified |
 | Translation cache avoids duplicate provider calls | `tests/test_converter_translation.py` | Verified |

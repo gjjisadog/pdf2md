@@ -95,7 +95,7 @@ Phase 8 增加 iPadOS BookMD 阅读器：
 - `packages/markdown_renderer/`: 移动端渲染资产。
 - `samples/ocr_output_sample/`: 不依赖真实 OCR 的假数据样例。
 
-BookMD 1.0 包使用 `format_version: "1.0"`。`bookmd validate --strict` 会校验 schema、ZIP 路径/重复项/大小安全、章节与 source map/search/translation 引用以及 Markdown 图片资产；缺少 `format_version` 的 0.1 包仍可读取，但会给出迁移 warning。PDF 封面与 figure/formula/table fallback 默认由 PDFium + Pillow 生成，不依赖 Swift、`pdftoppm` 或 `sips`。
+BookMD 1.0 包使用 `format_version: "1.0"`。`bookmd validate` 与 `bookmd quality-report` 默认执行严格 schema、ZIP 路径/重复项/大小安全、章节与 source map/search/translation 引用以及 Markdown 图片资产校验；需要旧工具的结构兼容检查时可显式使用 `--compat`。缺少 `format_version` 的 0.1 包仍可读取，但会给出迁移 warning。PDF 封面与 figure/formula/table fallback 默认由 PDFium + Pillow 生成，不依赖 Swift、`pdftoppm` 或 `sips`。
 
 Android debug APK 构建后位于：
 

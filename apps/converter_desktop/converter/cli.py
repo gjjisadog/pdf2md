@@ -59,14 +59,34 @@ def main(argv: list[str] | None = None) -> int:
     validate_parser.add_argument("bookmd")
     validate_parser.add_argument(
         "--strict",
+        dest="strict",
         action="store_true",
+        default=True,
         help="validate BookMD 1.0 schemas, archive safety, and cross-file references",
+    )
+    validate_parser.add_argument(
+        "--compat",
+        dest="strict",
+        action="store_false",
+        help="use compatibility-mode structural validation for legacy tooling",
     )
 
     quality_parser = subparsers.add_parser("quality-report")
     quality_parser.add_argument("bookmd")
     quality_parser.add_argument("--format", choices=["json", "markdown"], default="markdown")
-    quality_parser.add_argument("--strict", action="store_true")
+    quality_parser.add_argument(
+        "--strict",
+        dest="strict",
+        action="store_true",
+        default=True,
+        help="validate BookMD 1.0 schemas and cross-file references (default)",
+    )
+    quality_parser.add_argument(
+        "--compat",
+        dest="strict",
+        action="store_false",
+        help="use compatibility-mode structural validation for legacy tooling",
+    )
 
     validate_ocr_parser = subparsers.add_parser("validate-ocr")
     validate_ocr_parser.add_argument("ocr_output")

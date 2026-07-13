@@ -8,6 +8,12 @@
 
 **Tech Stack:** Python >=3.11, setuptools, pytest, jsonschema, pypdf, pypdfium2, Pillow, GitHub Actions, existing Kotlin/Swift static verifiers.
 
+## Current status (2026-07-14)
+
+- Tasks 1–5 are implemented and locally verified: installable sdist/wheel, BookMD 1.0 schemas and fixtures, strict validator, portable PDFium/Pillow backend, failure diagnostics, and Android/iOS version gates.
+- Task 6 is implemented in `.github/workflows/python-ci.yml`; commit `5750774` triggers the 3×2 Python matrix plus the Windows real-visual job. Gitea run 2 currently reports all seven jobs as `pending / Waiting to run` because no matching runner has claimed them.
+- Task 7 local evidence is complete (`356 passed`, isolated wheel install, sample strict build/validation). Remote Windows execution remains the only unverified acceptance item.
+
 ## Global Constraints
 
 - New packages write `format_version: "1.0"`; missing format version and `version: "0.1"` remain readable through a legacy profile with warnings.
@@ -103,4 +109,3 @@
 - [ ] Record CI run evidence, package-install status, Windows visual output, and explicit live-provider/platform limitations.
 - [ ] Run `git diff --check` and `git status --short --branch`.
 - [ ] Commit with `git add docs/final_acceptance.md docs/release_checklist.md docs/phase9.md && git commit -m "docs: record BookMD reliability acceptance"`.
-
