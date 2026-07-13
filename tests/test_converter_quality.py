@@ -17,6 +17,7 @@ def _make_bookmd(
     broken_asset: bool = False,
     translation_payload: dict | None = None,
     terms_payload: dict | None = None,
+    asset_generation_payload: dict | None = None,
 ) -> Path:
     root = tmp_path / "book"
     (root / "chapters").mkdir(parents=True)
@@ -80,6 +81,8 @@ def _make_bookmd(
             ]
         },
     )
+    if asset_generation_payload is not None:
+        _write_json(root / "asset_generation.json", asset_generation_payload)
     return package_directory(root, tmp_path / "book.bookmd")
 
 
@@ -207,3 +210,26 @@ def test_quality_report_does_not_warn_for_source_only_translation_payload(tmp_pa
     assert report.translation_block_count == 0
     assert report.untranslated_block_count == 0
     assert "untranslated blocks: 1" not in report.warnings
+
+
+def test_quality_report_warns_for_requested_visual_asset_failures(tmp_path):
+    bookmd = _make_bookmd(
+        tmp_path,
+        asset_generation_payload={
+            "requested": [{"block_id": "fig-1", "page": 3, "type": "figure"}],
+            "generated": [],
+            "failed": [
+                {
+                    "block_id": "fig-1",
+                    "page": 3,
+                    "type": "figure",
+                    "reason": "page renderer unavailable",
+                }
+            ],
+        },
+    )
+
+    report = inspect_bookmd(bookmd)
+
+    assert report.missing_visual_asset_block_ids == ["fig-1"]
+    assert "missing visual assets: 1" in report.warnings

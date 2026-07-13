@@ -94,7 +94,7 @@ python -m converter ocr \
   --batch-size 1
 ```
 
-`--batch-size 1` submits one page per OCR job. `--batch-size 3` submits three pages per OCR job. On macOS, batch mode uses Swift/PDFKit when available; otherwise it falls back to `pypdf`.
+`--batch-size 1` submits one page per OCR job. `--batch-size 3` submits three pages per OCR job. Batch splitting uses the same PDFium/Pillow-compatible portable backend on every OS, with a `pypdf` fallback for malformed or unsupported PDFs.
 
 For testing only the first few pages of a large book:
 

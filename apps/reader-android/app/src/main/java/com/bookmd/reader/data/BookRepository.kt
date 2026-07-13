@@ -75,6 +75,12 @@ class BookRepository(private val rootDir: File) {
     private fun validateBook(bookDir: File) {
         require(File(bookDir, "book.json").exists()) { "book.json is missing" }
         val manifest = readManifest(bookDir)
+        manifest.formatVersion?.let { formatVersion ->
+            val major = formatVersion.substringBefore('.')
+            require(major == "1") {
+                "Unsupported BookMD format major version: $formatVersion"
+            }
+        }
         require(manifest.chapters.isNotEmpty()) { "book chapters are missing" }
         manifest.chapters.forEach { chapter ->
             require(chapter.path.isNotBlank()) { "chapter path is missing" }

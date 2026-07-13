@@ -83,3 +83,20 @@ def test_strict_validation_rejects_unknown_major_version(tmp_path: Path):
 
     assert result.valid is False
     assert any("Unsupported BookMD format major version: 2.0" in error for error in result.errors)
+
+
+def test_strict_validation_accepts_known_major_unknown_minor_with_warning(tmp_path: Path):
+    archive = _archive_fixture("valid_v1", tmp_path)
+    with zipfile.ZipFile(archive, "r") as source:
+        members = {name: source.read(name) for name in source.namelist()}
+    book = json.loads(members["book.json"])
+    book["format_version"] = "1.1"
+    members["book.json"] = json.dumps(book).encode("utf-8")
+    with zipfile.ZipFile(archive, "w") as target:
+        for name, payload in members.items():
+            target.writestr(name, payload)
+
+    result = validate_bookmd(archive, strict=True)
+
+    assert result.valid is True
+    assert any("minor" in warning.lower() or "1.1" in warning for warning in result.warnings)

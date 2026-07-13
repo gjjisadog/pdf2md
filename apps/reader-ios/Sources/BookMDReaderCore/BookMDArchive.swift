@@ -85,6 +85,14 @@ public final class BookMDArchiveValidator {
         if names.contains("book.json") {
             do {
                 manifest = try BookMDArchive(url: url).manifest()
+                if let formatVersion = manifest?.formatVersion {
+                    let major = formatVersion.split(separator: ".", maxSplits: 1).first.map(String.init)
+                    if major != "1" {
+                        errors.append("Unsupported BookMD format major version: \(formatVersion)")
+                    }
+                } else {
+                    warnings.append("Legacy BookMD format detected; migration to format_version 1.0 is recommended")
+                }
                 for chapter in manifest?.chapters ?? [] where !names.contains(chapter.path) {
                     errors.append(BookMDError.missingChapter(chapter.path).localizedDescription)
                 }

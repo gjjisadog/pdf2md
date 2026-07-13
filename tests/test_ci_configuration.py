@@ -10,9 +10,11 @@ def test_python_ci_builds_and_installs_wheel_on_supported_hosts():
     assert "ubuntu-latest" in workflow
     assert "windows-latest" in workflow
     assert "macos-latest" in workflow
-    assert "python -m build --wheel" in workflow
+    assert "python -m build --sdist --wheel" in workflow
     assert "pip install" in workflow
     assert "bookmd --help" in workflow
+    assert "samples/ocr_output_sample" in workflow
+    assert "--strict" in workflow
 
 
 def test_windows_ci_runs_real_portable_visual_asset_tests():

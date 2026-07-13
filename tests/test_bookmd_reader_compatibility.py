@@ -11,6 +11,7 @@ def test_android_manifest_model_accepts_legacy_and_v1_format_markers():
 
     assert "formatVersion: String?" in model
     assert 'optString("format_version").takeIf' in repository
+    assert "Unsupported BookMD format major version" in repository
 
 
 def test_ios_manifest_model_accepts_legacy_and_v1_format_markers():
@@ -20,3 +21,8 @@ def test_ios_manifest_model_accepts_legacy_and_v1_format_markers():
 
     assert "public let formatVersion: String?" in model
     assert 'case formatVersion = "format_version"' in model
+
+    archive = Path("apps/reader-ios/Sources/BookMDReaderCore/BookMDArchive.swift").read_text(
+        encoding="utf-8"
+    )
+    assert "Unsupported BookMD format major version" in archive

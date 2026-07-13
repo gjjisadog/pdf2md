@@ -96,6 +96,37 @@ def test_generate_missing_block_assets_skips_when_renderer_unavailable(tmp_path)
     assert updated == [block]
 
 
+def test_generate_missing_block_assets_records_optional_failures(tmp_path):
+    source_pdf = tmp_path / "source.pdf"
+    source_pdf.write_bytes(b"%PDF-1.4\n" + b"0" * 2048)
+    block = OcrBlock(
+        block_id="fig-failed",
+        page=3,
+        type="figure",
+        bbox=[20, 30, 120, 150],
+        text="Unavailable diagram",
+    )
+    failures = []
+
+    updated = builder._generate_missing_block_assets(
+        source_pdf,
+        [block],
+        tmp_path / "assets",
+        page_renderer=lambda _source, _page, _work_dir: None,
+        failure_report=failures,
+    )
+
+    assert updated == [block]
+    assert failures == [
+        {
+            "block_id": "fig-failed",
+            "page": 3,
+            "type": "figure",
+            "reason": "page renderer unavailable",
+        }
+    ]
+
+
 def test_generate_missing_block_assets_crops_formula_and_table_blocks(tmp_path):
     source_pdf = tmp_path / "source.pdf"
     source_pdf.write_bytes(b"%PDF-1.4\n" + b"0" * 2048)

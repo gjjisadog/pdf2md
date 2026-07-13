@@ -30,7 +30,7 @@ python -m converter ocr --source-pdf path/to/book.pdf --output-dir path/to/ocr_o
 
 Use `--max-pages 6` for a small smoke test before processing the full book.
 
-On macOS the converter prefers Swift/PDFKit for splitting. If Swift/PDFKit and `pypdf` are both unavailable or cannot split the PDF, pre-split the file with a PDF tool and OCR the smaller files separately.
+Batch splitting uses the portable PDF backend first. If PDFium and the `pypdf` fallback both cannot split the PDF, pre-split the file with a PDF tool and OCR the smaller files separately.
 
 ## `DEEPSEEK_API_KEY is required`
 

@@ -12,7 +12,7 @@ Use this checklist before treating the personal MVP as a releasable local build.
 - Wheel isolation: `python -m build --wheel`, install the wheel in a clean environment, then run `bookmd --help`
 - Cross-platform visual assets: `python -m pytest tests/test_portable_visuals.py -q` (also required on `windows-latest` CI)
 - BookMD benchmark report: `python scripts/run_bookmd_benchmarks.py --manifest docs/bookmd_benchmarks.json --output tmp/bookmd_benchmark_report.json`
-- Real-book quality report: `python -m converter quality-report tmp/real_book_full_clean_text_visual.bookmd --format json`
+- Real-book quality report: `python -m converter quality-report tmp/real_book_full_clean_text_visual.bookmd --strict --format json`
 - Renderer parity: `python -m pytest tests/test_renderer_assets.py`
 - Android reader verifier: `python scripts/verify_android_reader.py`
 - Optional Android device smoke: `python scripts/verify_android_reader.py --device-smoke --bookmd path/to/sample.bookmd --search-term SVPWM` with `adb devices` showing a connected `device`

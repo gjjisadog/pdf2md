@@ -28,6 +28,7 @@ class BookMdQualityReport:
     asset_count: int
     referenced_asset_count: int
     broken_asset_references: list[str]
+    missing_visual_asset_block_ids: list[str]
     missing_source_pages: list[int]
     translation_provider: str
     translation_block_count: int
@@ -65,6 +66,7 @@ def inspect_bookmd(
     asset_count = 0
     referenced_assets: set[str] = set()
     broken_asset_references: list[str] = []
+    missing_visual_asset_block_ids: list[str] = []
     missing_source_pages: set[int] = set()
     translation_provider = ""
     translation_block_count = 0
@@ -120,6 +122,16 @@ def inspect_bookmd(
             broken_asset_references = sorted(
                 reference for reference in referenced_assets if _asset_archive_path(reference) not in asset_files
             )
+            asset_generation = _read_json(zf, "asset_generation.json")
+            failed_assets = asset_generation.get("failed")
+            if isinstance(failed_assets, list):
+                missing_visual_asset_block_ids = sorted(
+                    {
+                        str(item.get("block_id"))
+                        for item in failed_assets
+                        if isinstance(item, dict) and item.get("block_id")
+                    }
+                )
 
             translation = _read_json(zf, "translation.json")
             terms = _read_json(zf, "terms.json")
@@ -147,6 +159,8 @@ def inspect_bookmd(
         warnings.append(f"empty chapters: {empty_chapter_count}")
     if broken_asset_references:
         warnings.append(f"broken asset references: {len(broken_asset_references)}")
+    if missing_visual_asset_block_ids:
+        warnings.append(f"missing visual assets: {len(missing_visual_asset_block_ids)}")
     if missing_source_pages:
         warnings.append(f"missing source pages: {len(missing_source_pages)}")
     if not has_cover:
@@ -173,6 +187,7 @@ def inspect_bookmd(
         asset_count=asset_count,
         referenced_asset_count=len(referenced_assets),
         broken_asset_references=broken_asset_references,
+        missing_visual_asset_block_ids=missing_visual_asset_block_ids,
         missing_source_pages=sorted(missing_source_pages),
         translation_provider=translation_provider,
         translation_block_count=translation_block_count,
@@ -197,6 +212,9 @@ def render_quality_report_markdown(report: BookMdQualityReport) -> str:
     warnings = "\n".join(f"  - {warning}" for warning in report.warnings) or "  - none"
     errors = "\n".join(f"  - {error}" for error in report.errors) or "  - none"
     broken_assets = "\n".join(f"  - {asset}" for asset in report.broken_asset_references) or "  - none"
+    missing_visual_assets = "\n".join(
+        f"  - {block_id}" for block_id in report.missing_visual_asset_block_ids
+    ) or "  - none"
     untranslated_blocks = "\n".join(f"  - {block_id}" for block_id in report.untranslated_block_ids) or "  - none"
     missing_terms = "\n".join(f"  - {term}" for term in report.missing_glossary_targets) or "  - none"
     markdown_risks = "\n".join(f"  - {block_id}" for block_id in report.markdown_risk_block_ids) or "  - none"
@@ -224,6 +242,9 @@ def render_quality_report_markdown(report: BookMdQualityReport) -> str:
             "",
             "## Broken Asset References",
             broken_assets,
+            "",
+            "## Missing Visual Assets",
+            missing_visual_assets,
             "",
             "## Translation Gaps",
             untranslated_blocks,

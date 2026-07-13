@@ -13,8 +13,6 @@ from pathlib import Path
 from typing import Any
 
 from bookmd_core import package_directory, validate_bookmd
-from bookmd_core.visuals import crop_image as _portable_crop_image
-from bookmd_core.visuals import render_pdf_page as _portable_render_pdf_page
 from source_map_core import OcrBlock, build_source_map, normalize_blocks
 from translator_core import (
     DeepSeekConfig,
@@ -29,6 +27,7 @@ from translator_core import (
 
 from .chapters import Chapter, build_chapters
 from .markdown import render_block_markdown
+from .pdf_backend import PdfBackendError, get_pdf_backend
 
 
 class ConverterError(RuntimeError):
@@ -246,8 +245,38 @@ def _write_book_directory(
     cover_asset_path = ""
     if _config_value(options, "output", "preserve_cover", True):
         cover_asset_path = _generate_cover_asset(options.source_pdf, staging / "assets")
+    asset_generation: dict[str, Any] = {
+        "requested": [],
+        "generated": [],
+        "failed": [],
+    }
     if _config_value(options, "output", "generate_block_assets", False):
-        blocks = _generate_missing_block_assets(options.source_pdf, blocks, staging / "assets")
+        requested_assets = [
+            {
+                "block_id": block.block_id,
+                "page": block.page,
+                "type": block.type,
+            }
+            for block in blocks
+            if _needs_generated_asset(block)
+        ]
+        failures: list[dict[str, Any]] = []
+        blocks = _generate_missing_block_assets(
+            options.source_pdf,
+            blocks,
+            staging / "assets",
+            failure_report=failures,
+        )
+        requested_ids = {item["block_id"] for item in requested_assets}
+        asset_generation = {
+            "requested": requested_assets,
+            "generated": [
+                {"block_id": block.block_id, "page": block.page, "type": block.type, "asset_path": block.asset_path}
+                for block in blocks
+                if block.block_id in requested_ids and block.asset_path
+            ],
+            "failed": failures,
+        }
         chapters = _replace_chapter_blocks(chapters, blocks)
 
     chapter_by_block: dict[str, tuple[str, str]] = {}
@@ -271,6 +300,7 @@ def _write_book_directory(
     _write_json(staging / "translation.json", _translation_payload(blocks, options))
     _write_json(staging / "reading_config.json", _reading_config(options))
     _write_json(staging / "search_index.json", _search_index(blocks, chapter_by_block, chapters))
+    _write_json(staging / "asset_generation.json", asset_generation)
 
 
 def _generate_cover_asset(source_pdf: Path, assets_root: Path) -> str:
@@ -307,6 +337,7 @@ def _generate_missing_block_assets(
     assets_root: Path,
     page_renderer: Callable[[Path, int, Path], Path | None] | None = None,
     image_cropper: Callable[[Path, list[float], Path], bool] | None = None,
+    failure_report: list[dict[str, Any]] | None = None,
 ) -> list[OcrBlock]:
     targets = [
         block for block in blocks
@@ -332,11 +363,53 @@ def _generate_missing_block_assets(
             relative_path = f"assets/generated/page_{block.page:03d}_{_safe_asset_name(block.block_id)}.png"
             output_path = assets_root.parent / relative_path
             if block.page not in page_images:
-                page_images[block.page] = renderer(source_pdf, block.page, work_dir)
+                try:
+                    page_images[block.page] = renderer(source_pdf, block.page, work_dir)
+                except Exception as exc:
+                    page_images[block.page] = None
+                    if failure_report is not None:
+                        failure_report.append(
+                            {
+                                "block_id": block.block_id,
+                                "page": block.page,
+                                "type": block.type,
+                                "reason": f"page renderer failed: {exc}",
+                            }
+                        )
             page_image = page_images[block.page]
-            if page_image is not None and cropper(page_image, block.bbox, output_path):
+            if page_image is None:
+                if failure_report is not None and not any(
+                    item["block_id"] == block.block_id for item in failure_report
+                ):
+                    failure_report.append(
+                        {
+                            "block_id": block.block_id,
+                            "page": block.page,
+                            "type": block.type,
+                            "reason": "page renderer unavailable",
+                        }
+                    )
+                updated.append(block)
+                continue
+            try:
+                cropped = cropper(page_image, block.bbox, output_path)
+            except Exception as exc:
+                cropped = False
+                crop_error = f"crop failed: {exc}"
+            else:
+                crop_error = "crop returned false"
+            if cropped:
                 updated.append(_with_asset_path(block, relative_path))
                 continue
+            if failure_report is not None:
+                failure_report.append(
+                    {
+                        "block_id": block.block_id,
+                        "page": block.page,
+                        "type": block.type,
+                        "reason": crop_error,
+                    }
+                )
             updated.append(block)
     return updated
 
@@ -403,10 +476,9 @@ def _crop_pdf_block_with_pdfkit(
 
 def _render_pdf_page_image(source_pdf: Path, page: int, work_dir: Path) -> Path | None:
     work_dir.mkdir(parents=True, exist_ok=True)
-    portable_output = work_dir / f"page_{page:03d}.png"
     try:
-        return _portable_render_pdf_page(source_pdf, page, portable_output, scale=2.0)
-    except (OSError, RuntimeError, ValueError):
+        return get_pdf_backend().render_page(source_pdf, page, 144, work_dir)
+    except PdfBackendError:
         pass
 
     pdftoppm = shutil.which("pdftoppm")
@@ -442,7 +514,7 @@ def _render_pdf_page_image(source_pdf: Path, page: int, work_dir: Path) -> Path 
 
 
 def _crop_page_image(page_image: Path, bbox: list[float], output_path: Path) -> bool:
-    if _portable_crop_image(page_image, bbox, output_path):
+    if get_pdf_backend().crop_region(page_image, bbox, output_path):
         return True
 
     sips = shutil.which("sips")

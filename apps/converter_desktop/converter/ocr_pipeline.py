@@ -11,6 +11,7 @@ from ocr_client import OcrApiConfig, OcrHttpClient, OcrJobClient, write_ocr_outp
 from source_map_core import build_source_map, normalize_blocks
 
 from .markdown import render_block_markdown
+from .pdf_backend import PdfBackendError, get_pdf_backend
 
 
 _PDFKIT_SPLITTER_SWIFT = r'''
@@ -148,19 +149,36 @@ def split_pdf_batches(
     max_pages: int | None = None,
     page_range: tuple[int, int] | None = None,
 ) -> list[OcrBatch]:
-    if shutil.which("swift"):
-        try:
-            return _split_pdf_batches_with_pdfkit(source_pdf, batch_size, work_dir, max_pages, page_range)
-        except RuntimeError:
-            pass
-    try:
-        from pypdf import PdfReader, PdfWriter
-    except ImportError as exc:
-        raise RuntimeError(
-            "Batch OCR requires macOS Swift/PDFKit or pypdf to split PDFs. Install pypdf or provide pre-split input."
-        ) from exc
-
     work_dir.mkdir(parents=True, exist_ok=True)
+    backend = get_pdf_backend()
+    try:
+        total_pages = backend.page_count(source_pdf)
+        first_page, last_page = _selected_page_bounds(total_pages, max_pages, page_range)
+        batches: list[OcrBatch] = []
+        for start_page in range(first_page, last_page + 1, batch_size):
+            pages_in_batch = min(batch_size, last_page - start_page + 1)
+            output = work_dir / f"batch_{len(batches) + 1:03d}.pdf"
+            backend.split_pages(source_pdf, start_page, pages_in_batch, output)
+            batches.append(OcrBatch(path=output, first_page=start_page))
+        return batches
+    except PdfBackendError as exc:
+        try:
+            return _split_pdf_batches_with_pypdf(source_pdf, batch_size, work_dir, max_pages, page_range)
+        except (ImportError, RuntimeError) as fallback_exc:
+            raise RuntimeError(
+                f"Portable PDF backend failed for {source_pdf}: {exc}; pypdf fallback failed: {fallback_exc}"
+            ) from exc
+
+
+def _split_pdf_batches_with_pypdf(
+    source_pdf: Path,
+    batch_size: int,
+    work_dir: Path,
+    max_pages: int | None = None,
+    page_range: tuple[int, int] | None = None,
+) -> list[OcrBatch]:
+    from pypdf import PdfReader, PdfWriter
+
     reader = PdfReader(str(source_pdf))
     batches: list[OcrBatch] = []
     first_page, last_page = _selected_page_bounds(len(reader.pages), max_pages, page_range)

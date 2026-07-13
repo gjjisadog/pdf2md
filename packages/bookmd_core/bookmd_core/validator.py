@@ -145,7 +145,10 @@ def _book_schema_version(book: dict[str, Any], warnings: list[str], errors: list
     if major != "1":
         errors.append(f"Unsupported BookMD format major version: {version}")
     else:
-        errors.append(f"Unsupported BookMD format version: {version}")
+        warnings.append(
+            f"BookMD format minor version {version!r} is newer than 1.0; validating the 1.0 compatibility profile"
+        )
+        return "1.0"
     return None
 
 
@@ -157,11 +160,14 @@ def _validate_schemas(payloads: dict[str, Any], errors: list[str]) -> None:
         schema_name = member.removesuffix(".json")
         if schema_name not in SCHEMA_NAMES:
             continue
+        schema_payload = payload
+        if member == "book.json" and isinstance(payload, dict) and payload.get("format_version") != "1.0":
+            schema_payload = {**payload, "format_version": "1.0"}
         try:
             schema = load_schema(schema_name, "1.0")
             validator = Draft202012Validator(schema)
             for error in sorted(
-                validator.iter_errors(payload),
+                validator.iter_errors(schema_payload),
                 key=lambda item: tuple(str(part) for part in item.path),
             ):
                 location = ".".join(str(part) for part in error.path) or "$"
