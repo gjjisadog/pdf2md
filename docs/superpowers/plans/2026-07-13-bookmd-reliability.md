@@ -11,7 +11,7 @@
 ## Current status (2026-07-14)
 
 - Tasks 1–5 are implemented and locally verified: installable sdist/wheel, BookMD 1.0 schemas and fixtures, strict validator, portable PDFium/Pillow backend, failure diagnostics, and Android/iOS version gates.
-- Task 6 is implemented in `.github/workflows/python-ci.yml`; commit `5750774` triggers the 3×2 Python matrix plus the Windows real-visual job. Gitea run 2 currently reports all seven jobs as `pending / Waiting to run` because no matching runner has claimed them.
+- Task 6 is implemented in `.github/workflows/python-ci.yml`; commit `36d8d03` triggers the 3×2 Python matrix plus the Windows real-visual job. Gitea run 3 currently reports all seven jobs as `pending / Waiting to run` because no matching runner has claimed them.
 - Task 7 local evidence is complete (`356 passed`, isolated wheel install, sample strict build/validation). Remote Windows execution remains the only unverified acceptance item.
 
 ## Global Constraints
