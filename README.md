@@ -21,6 +21,16 @@ python -m converter build --source-pdf samples/ocr_output_sample/original.pdf --
 python -m converter validate samples/bookmd_sample/sample.bookmd
 ```
 
+干净环境安装与构建：
+
+```bash
+python -m pip install -e '.[dev]'
+python -m build --wheel
+bookmd --help
+```
+
+安装后的 `bookmd` 命令与 `python -m converter` 使用同一套 CLI；CI 会在全新虚拟环境中安装 wheel 后执行样例构建和严格校验。
+
 发布前完整验证：
 
 ```bash

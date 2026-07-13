@@ -3,6 +3,42 @@ name = "pdf-bookmd-reader"
 version = "0.1.0"
 description = "Local PDF OCR output to BookMD converter and Android reader skeleton."
 requires-python = ">=3.11"
+dependencies = [
+  "pypdf>=5.0",
+  "pypdfium2>=4.30",
+  "Pillow>=10.0",
+  "jsonschema>=4.23",
+]
+
+[project.scripts]
+bookmd = "converter.cli:main"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "build>=1.2",
+]
+
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+packages = [
+  "converter",
+  "bookmd_core",
+  "source_map_core",
+  "translator_core",
+  "ocr_client",
+]
+
+[tool.setuptools.package-dir]
+converter = "apps/converter_desktop/converter"
+bookmd_core = "packages/bookmd_core/bookmd_core"
+source_map_core = "packages/source_map_core/source_map_core"
+translator_core = "packages/translator_core/translator_core"
+ocr_client = "packages/ocr_client/ocr_client"
 
 [tool.pytest.ini_options]
 pythonpath = [
