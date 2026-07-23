@@ -9,7 +9,7 @@ import zipfile
 
 from bookmd_core import validate_bookmd
 from source_map_core import normalize_blocks
-from translator_core import MissingApiKeyError
+from translator_core import DeepSeekConfigError
 from ocr_client import MissingOcrConfigError, OcrApiError
 
 from .builder import BuildOptions, ConverterError, build_bookmd
@@ -27,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
     build_parser.add_argument("--ocr-output", required=True)
     build_parser.add_argument("--output", required=True)
     build_parser.add_argument("--translate", default="false")
-    build_parser.add_argument("--target-lang", default="zh")
+    build_parser.add_argument("--target-lang")
     build_parser.add_argument("--provider", default="noop")
     build_parser.add_argument("--config")
     build_parser.add_argument("--generate-block-assets")
@@ -47,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
     build_from_pdf_parser.add_argument("--ocr-output", required=True)
     build_from_pdf_parser.add_argument("--output", required=True)
     build_from_pdf_parser.add_argument("--translate", default="false")
-    build_from_pdf_parser.add_argument("--target-lang", default="zh")
+    build_from_pdf_parser.add_argument("--target-lang")
     build_from_pdf_parser.add_argument("--provider", default="noop")
     build_from_pdf_parser.add_argument("--config")
     build_from_pdf_parser.add_argument("--generate-block-assets")
@@ -147,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
     except URLError as exc:
         print(_format_ocr_network_error(exc))
         return 1
-    except (ConverterError, MissingApiKeyError, MissingOcrConfigError, OcrApiError, FileNotFoundError) as exc:
+    except (ConverterError, DeepSeekConfigError, MissingOcrConfigError, OcrApiError, FileNotFoundError) as exc:
         print(f"ERROR: {exc}")
         return 1
 
@@ -161,17 +161,12 @@ def _build_options_from_args(args: argparse.Namespace) -> BuildOptions:
         output_config = config.setdefault("output", {})
         if isinstance(output_config, dict):
             output_config["generate_block_assets"] = _parse_bool(generate_block_assets)
-    target_lang = args.target_lang
-    translation = config.get("translation")
-    if isinstance(translation, dict):
-        target_lang = str(translation.get("default_target_lang", target_lang))
-
     return BuildOptions(
         source_pdf=Path(args.source_pdf),
         ocr_output=Path(args.ocr_output),
         output=Path(args.output),
         translate=_parse_bool(args.translate),
-        target_lang=target_lang,
+        target_lang=args.target_lang,
         provider=args.provider,
         config=config,
     )

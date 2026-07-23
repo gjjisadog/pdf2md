@@ -162,3 +162,29 @@ def test_cli_reports_missing_deepseek_api_key_without_traceback(tmp_path, monkey
     assert completed.returncode == 1
     assert "DEEPSEEK_API_KEY is required" in completed.stdout
     assert "Traceback" not in completed.stderr
+
+
+def test_cli_reports_invalid_deepseek_environment_without_traceback(tmp_path, monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.setenv("DEEPSEEK_TIMEOUT", "not-a-number")
+    sample = make_minimal_ocr_dir(tmp_path)
+    pdf = tmp_path / "source.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+
+    completed = run_converter(
+        "build",
+        "--source-pdf",
+        str(pdf),
+        "--ocr-output",
+        str(sample),
+        "--output",
+        str(tmp_path / "out.bookmd"),
+        "--translate",
+        "true",
+        "--provider",
+        "deepseek",
+    )
+
+    assert completed.returncode == 1
+    assert "DEEPSEEK_TIMEOUT must be an integer" in completed.stdout
+    assert "Traceback" not in completed.stderr

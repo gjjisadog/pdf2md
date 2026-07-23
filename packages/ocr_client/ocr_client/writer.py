@@ -1,26 +1,30 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 from collections.abc import Mapping
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from source_map_core import build_source_map, normalize_blocks
 
 
-def write_ocr_output(response: Mapping[str, Any], output_dir: Path | str) -> Path:
-    target = Path(output_dir)
-    target.mkdir(parents=True, exist_ok=True)
-    (target / "assets").mkdir(exist_ok=True)
+class OcrApiError(RuntimeError):
+    pass
 
+
+def write_ocr_output(response: Mapping[str, Any], output_dir: Path | str) -> Path:
     normalized = {
         "metadata": dict(response.get("metadata") or {}),
         "blocks": list(response.get("blocks") or []),
         "assets": list(response.get("assets") or []),
     }
-    _write_assets(normalized["assets"], target)
+    prepared_assets = _prepare_assets(normalized["assets"])
+    target = Path(output_dir)
+    target.mkdir(parents=True, exist_ok=True)
+    _write_assets(prepared_assets, target)
     (target / "result.json").write_text(
         json.dumps(normalized, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -43,17 +47,61 @@ def write_ocr_source_map(result_json: Mapping[str, Any], output_dir: Path | str)
     )
 
 
-def _write_assets(assets: list[Any], output_dir: Path) -> None:
+def _prepare_assets(assets: list[Any]) -> list[tuple[Path, bytes]]:
+    prepared_assets: list[tuple[Path, bytes]] = []
     for asset in assets:
         if not isinstance(asset, Mapping):
             continue
-        relative_path = str(asset.get("path") or "")
         content_base64 = asset.get("content_base64")
-        if not relative_path or not isinstance(content_base64, str):
+        if content_base64 is None:
             continue
-        asset_path = output_dir / relative_path
+        relative_path = asset.get("path")
+        if not isinstance(relative_path, str) or not relative_path:
+            raise OcrApiError("OCR inline asset must include a non-empty path")
+        if not isinstance(content_base64, str):
+            raise OcrApiError(f"OCR inline asset content_base64 must be a string: {relative_path!r}")
+        safe_path = _safe_asset_path(relative_path)
+        try:
+            content = base64.b64decode(content_base64, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise OcrApiError(f"OCR inline asset has invalid base64 content: {relative_path!r}") from exc
+        prepared_assets.append((safe_path, content))
+    return prepared_assets
+
+
+def _safe_asset_path(relative_path: str) -> Path:
+    if "\\" in relative_path:
+        raise OcrApiError(f"OCR inline asset path must be a safe relative path: {relative_path!r}")
+    candidate = Path(relative_path)
+    if (
+        candidate.is_absolute()
+        or PureWindowsPath(relative_path).is_absolute()
+        or any(part in {".", ".."} for part in candidate.parts)
+    ):
+        raise OcrApiError(f"OCR inline asset path must be a safe relative path: {relative_path!r}")
+
+    parts = candidate.parts
+    if not parts:
+        raise OcrApiError("OCR inline asset must include a non-empty path")
+    if parts[0] == "assets":
+        parts = parts[1:]
+    if not parts:
+        raise OcrApiError(f"OCR inline asset path must name a file under assets/: {relative_path!r}")
+    return Path(*parts)
+
+
+def _write_assets(assets: list[tuple[Path, bytes]], output_dir: Path) -> None:
+    assets_dir = output_dir / "assets"
+    assets_dir.mkdir(exist_ok=True)
+    assets_root = assets_dir.resolve()
+    for relative_path, content in assets:
+        asset_path = assets_dir / relative_path
         asset_path.parent.mkdir(parents=True, exist_ok=True)
-        asset_path.write_bytes(base64.b64decode(content_base64))
+        try:
+            asset_path.resolve().relative_to(assets_root)
+        except ValueError as exc:
+            raise OcrApiError(f"OCR inline asset path escapes assets directory: {relative_path!s}") from exc
+        asset_path.write_bytes(content)
 
 
 def _render_result_markdown(blocks: list[Any]) -> str:

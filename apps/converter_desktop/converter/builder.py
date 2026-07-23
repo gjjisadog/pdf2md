@@ -109,7 +109,7 @@ class BuildOptions:
     ocr_output: Path
     output: Path
     translate: bool = False
-    target_lang: str = "zh"
+    target_lang: str | None = None
     provider: str = "noop"
     config: dict[str, Any] | None = None
 
@@ -721,14 +721,9 @@ def _write_json(path: Path, data: Any) -> None:
 
 
 def _target_lang(options: BuildOptions) -> str:
-    return str(
-        _config_value(
-            options,
-            "translation",
-            "default_target_lang",
-            options.target_lang,
-        )
-    )
+    if options.target_lang is not None:
+        return options.target_lang
+    return str(_config_value(options, "translation", "default_target_lang", "zh"))
 
 
 def _translation_model(options: BuildOptions) -> str:

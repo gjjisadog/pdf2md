@@ -6,11 +6,16 @@ from dataclasses import dataclass
 from typing import Any, Callable
 from urllib import request
 from urllib.error import URLError
+from urllib.parse import urlparse
 
 from .models import TranslationBlock, TranslationResult
 
 
-class MissingApiKeyError(RuntimeError):
+class DeepSeekConfigError(RuntimeError):
+    pass
+
+
+class MissingApiKeyError(DeepSeekConfigError):
     pass
 
 
@@ -38,12 +43,43 @@ class DeepSeekConfig:
         return cls(
             api_key=api_key,
             model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
-            base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/chat/completions"),
-            timeout=int(os.getenv("DEEPSEEK_TIMEOUT", "60")),
-            retry=int(os.getenv("DEEPSEEK_RETRY", "3")),
-            temperature=float(os.getenv("DEEPSEEK_TEMPERATURE", "0.2")),
-            max_tokens=int(os.getenv("DEEPSEEK_MAX_TOKENS", "4096")),
+            base_url=_env_http_url("DEEPSEEK_BASE_URL", "https://api.deepseek.com/chat/completions"),
+            timeout=_env_positive_int("DEEPSEEK_TIMEOUT", 60),
+            retry=_env_int("DEEPSEEK_RETRY", 3),
+            temperature=_env_float("DEEPSEEK_TEMPERATURE", 0.2),
+            max_tokens=_env_int("DEEPSEEK_MAX_TOKENS", 4096),
         )
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name, str(default))
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise DeepSeekConfigError(f"{name} must be an integer") from exc
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name, str(default))
+    try:
+        return float(raw)
+    except ValueError as exc:
+        raise DeepSeekConfigError(f"{name} must be a number") from exc
+
+
+def _env_positive_int(name: str, default: int) -> int:
+    value = _env_int(name, default)
+    if value < 1:
+        raise DeepSeekConfigError(f"{name} must be greater than 0")
+    return value
+
+
+def _env_http_url(name: str, default: str) -> str:
+    value = os.getenv(name, default)
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise DeepSeekConfigError(f"{name} must be an absolute HTTP(S) URL")
+    return value
 
 
 Transport = Callable[[dict[str, Any], DeepSeekConfig], dict[str, Any]]

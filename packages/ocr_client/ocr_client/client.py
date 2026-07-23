@@ -10,16 +10,12 @@ from pathlib import Path
 from typing import Any
 from urllib import request
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
-from .writer import write_ocr_source_map
+from .writer import OcrApiError, write_ocr_source_map
 
 
 class MissingOcrConfigError(RuntimeError):
-    pass
-
-
-class OcrApiError(RuntimeError):
     pass
 
 
@@ -117,21 +113,26 @@ class OcrJobClient:
             pdf_bytes = handle.read()
         job = self._wait_for_success(self.submit_transport(pdf_bytes, os.path.basename(path), self.config))
         files = _job_files(job)
-        target = Path(output_dir)
-        target.mkdir(parents=True, exist_ok=True)
-        (target / "assets").mkdir(exist_ok=True)
         downloads = {
             "result_md": "result.md",
             "result_json": "result.json",
             "source_map": "source_map.json",
             "parse_log": "parse.log",
         }
+        download_files: list[tuple[str, str, str]] = []
         for key, filename in downloads.items():
             file_url = files.get(key)
             if not file_url:
                 if key == "source_map":
                     continue
                 raise OcrApiError(f"OCR job response missing file URL: {key}")
+            file_url = str(file_url)
+            _validate_job_file_url(self.config, file_url)
+            download_files.append((key, filename, file_url))
+        target = Path(output_dir)
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "assets").mkdir(exist_ok=True)
+        for key, filename, file_url in download_files:
             content = self._with_retries(lambda: self.download_transport(str(file_url), self.config))
             (target / filename).write_bytes(content)
         _ensure_source_map_aligned(target)
@@ -373,11 +374,11 @@ def _job_status_transport(job_id: str, config: OcrApiConfig) -> dict[str, Any]:
 
 def _job_download_transport(file_url: str, config: OcrApiConfig) -> bytes:
     http_request = request.Request(
-        _service_url(config, file_url),
+        _resolve_job_file_url(config, file_url),
         headers=_auth_headers(config),
         method="GET",
     )
-    with _urlopen(http_request, timeout=config.timeout) as response:
+    with _job_urlopen(http_request, timeout=config.timeout) as response:
         return response.read()
 
 
@@ -392,11 +393,56 @@ def _urlopen(http_request: request.Request, timeout: int):
     return opener.open(http_request, timeout=timeout)
 
 
+class _NoRedirectHandler(request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _job_urlopen(http_request: request.Request, timeout: int):
+    opener = request.build_opener(request.ProxyHandler({}), _NoRedirectHandler())
+    return opener.open(http_request, timeout=timeout)
+
+
 def _service_url(config: OcrApiConfig, path: str) -> str:
     base_url = config.api_url.rstrip("/") + "/"
     if path.startswith("http://") or path.startswith("https://"):
         return path
     return urljoin(base_url, path.lstrip("/"))
+
+
+def _validate_job_file_url(config: OcrApiConfig, file_url: str) -> None:
+    _resolve_job_file_url(config, file_url)
+
+
+def _resolve_job_file_url(config: OcrApiConfig, file_url: str) -> str:
+    if not isinstance(file_url, str) or not file_url:
+        raise OcrApiError("OCR job file URL must be a non-empty string")
+    provided = urlsplit(file_url)
+    if provided.scheme or provided.netloc:
+        if provided.scheme not in {"http", "https"} or not provided.netloc:
+            raise OcrApiError(f"OCR job file URL must be a relative path or absolute HTTP(S) URL: {file_url!r}")
+        resolved_url = file_url
+    else:
+        resolved_url = _service_url(config, file_url)
+
+    base_origin = _url_origin(config.api_url, "OCR_API_URL")
+    file_origin = _url_origin(resolved_url, "OCR job file URL")
+    if file_origin != base_origin:
+        raise OcrApiError("OCR job file URL must use the same origin as OCR_API_URL")
+    return resolved_url
+
+
+def _url_origin(url: str, label: str) -> tuple[str, str, int]:
+    parsed = urlsplit(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise OcrApiError(f"{label} must be an absolute HTTP(S) URL")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise OcrApiError(f"{label} has an invalid port") from exc
+    if port is None:
+        port = 443 if parsed.scheme == "https" else 80
+    return parsed.scheme.lower(), parsed.hostname.lower(), port
 
 
 def _multipart_body(

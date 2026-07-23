@@ -2,6 +2,7 @@ import pytest
 
 from translator_core import (
     DeepSeekConfig,
+    DeepSeekConfigError,
     DeepSeekTranslator,
     MalformedTranslationError,
     MissingApiKeyError,
@@ -26,6 +27,22 @@ def test_deepseek_config_requires_api_key_when_enabled(monkeypatch):
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
 
     with pytest.raises(MissingApiKeyError):
+        DeepSeekConfig.from_env()
+
+
+def test_deepseek_config_rejects_invalid_numeric_environment_value(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.setenv("DEEPSEEK_TIMEOUT", "not-a-number")
+
+    with pytest.raises(DeepSeekConfigError, match="DEEPSEEK_TIMEOUT must be an integer"):
+        DeepSeekConfig.from_env()
+
+
+def test_deepseek_config_rejects_invalid_base_url(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.setenv("DEEPSEEK_BASE_URL", "not-a-url")
+
+    with pytest.raises(DeepSeekConfigError, match="DEEPSEEK_BASE_URL must be an absolute HTTP\\(S\\) URL"):
         DeepSeekConfig.from_env()
 
 

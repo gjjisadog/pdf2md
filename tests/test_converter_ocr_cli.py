@@ -272,6 +272,49 @@ def test_cli_ocr_batch_splits_and_merges_outputs(tmp_path, monkeypatch):
     assert source_map["blocks"][0]["source_text"] == "Page 1 text"
 
 
+def test_cli_ocr_max_pages_without_batch_size_splits_selected_pages(tmp_path, monkeypatch):
+    pdf = tmp_path / "source.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    output_dir = tmp_path / "ocr_output"
+    batch_one = tmp_path / "batch_001.pdf"
+    batch_one.write_bytes(b"batch one")
+    captured = {}
+    fake_client = FakeBatchOcrClient()
+    monkeypatch.setattr(ocr_pipeline, "_ocr_client_from_env", lambda: fake_client)
+
+    def fake_split(source, batch_size, work_dir, max_pages=None, page_range=None):
+        captured.update(
+            source=source,
+            batch_size=batch_size,
+            max_pages=max_pages,
+            page_range=page_range,
+        )
+        return [ocr_pipeline.OcrBatch(path=batch_one, first_page=1)]
+
+    monkeypatch.setattr(ocr_pipeline, "split_pdf_batches", fake_split)
+
+    exit_code = cli.main(
+        [
+            "ocr",
+            "--source-pdf",
+            str(pdf),
+            "--output-dir",
+            str(output_dir),
+            "--max-pages",
+            "2",
+        ]
+    )
+
+    assert exit_code == 0
+    assert fake_client.calls == ["batch_001.pdf"]
+    assert captured == {
+        "source": pdf,
+        "batch_size": 2,
+        "max_pages": 2,
+        "page_range": None,
+    }
+
+
 def test_ocr_batch_merge_rerenders_markdown_from_normalized_blocks(tmp_path):
     batch_pdf = tmp_path / "batch_001.pdf"
     batch_pdf.write_bytes(b"%PDF-1.4")
@@ -316,6 +359,68 @@ def test_ocr_batch_merge_rerenders_markdown_from_normalized_blocks(tmp_path):
     assert "p004_b001" in result_md
 
 
+def test_ocr_batch_merge_keeps_metadata_and_namespaces_assets(tmp_path):
+    batch_one_pdf = tmp_path / "batch_001.pdf"
+    batch_two_pdf = tmp_path / "batch_002.pdf"
+    batch_one_pdf.write_bytes(b"%PDF-1.4")
+    batch_two_pdf.write_bytes(b"%PDF-1.4")
+    batch_one_output = tmp_path / "batch_001"
+    batch_two_output = tmp_path / "batch_002"
+
+    for output, metadata, block, content in (
+        (
+            batch_one_output,
+            {"title": "Batch OCR Book", "author": "Ada"},
+            {"type": "figure", "asset_path": "assets/images/figure.png", "caption": "First figure"},
+            b"first image",
+        ),
+        (
+            batch_two_output,
+            {"title": "Conflicting title", "language": "en"},
+            {"type": "figure", "src": "assets/images/figure.png", "caption": "Second figure"},
+            b"second image",
+        ),
+    ):
+        (output / "assets" / "images").mkdir(parents=True)
+        (output / "assets" / "images" / "figure.png").write_bytes(content)
+        (output / "result.json").write_text(
+            json.dumps(
+                {
+                    "metadata": metadata,
+                    "pages": [{"page_index": 1, "blocks": [block]}],
+                    "assets": [{"path": "assets/images/figure.png", "kind": "image"}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (output / "result.md").write_text("fallback\n", encoding="utf-8")
+        (output / "parse.log").write_text("ok\n", encoding="utf-8")
+
+    output_dir = tmp_path / "ocr_output"
+    ocr_pipeline.merge_ocr_batch_outputs(
+        [
+            (ocr_pipeline.OcrBatch(path=batch_one_pdf, first_page=1), batch_one_output),
+            (ocr_pipeline.OcrBatch(path=batch_two_pdf, first_page=2), batch_two_output),
+        ],
+        output_dir,
+    )
+
+    result_json = json.loads((output_dir / "result.json").read_text(encoding="utf-8"))
+    result_md = (output_dir / "result.md").read_text(encoding="utf-8")
+
+    assert result_json["metadata"] == {"title": "Batch OCR Book", "author": "Ada", "language": "en"}
+    assert result_json["pages"][0]["blocks"][0]["asset_path"] == "assets/batch_001/images/figure.png"
+    assert result_json["pages"][1]["blocks"][0]["src"] == "assets/batch_002/images/figure.png"
+    assert [asset["path"] for asset in result_json["assets"]] == [
+        "assets/batch_001/images/figure.png",
+        "assets/batch_002/images/figure.png",
+    ]
+    assert (output_dir / "assets" / "batch_001" / "images" / "figure.png").read_bytes() == b"first image"
+    assert (output_dir / "assets" / "batch_002" / "images" / "figure.png").read_bytes() == b"second image"
+    assert '../assets/batch_001/images/figure.png' in result_md
+    assert '../assets/batch_002/images/figure.png' in result_md
+
+
 def test_cli_ocr_batch_resumes_completed_persisted_batches(tmp_path, monkeypatch):
     pdf = tmp_path / "source.pdf"
     pdf.write_bytes(b"%PDF-1.4")
@@ -348,6 +453,33 @@ def test_cli_ocr_batch_resumes_completed_persisted_batches(tmp_path, monkeypatch
         encoding="utf-8",
     )
     (persisted_batch_one / "parse.log").write_text("persisted batch 1 ok\n", encoding="utf-8")
+    previous_options = ocr_pipeline.OcrOptions(
+        source_pdf=pdf,
+        output_dir=output_dir,
+        batch_size=1,
+        max_pages=2,
+    )
+    manifest_entries = [
+        {
+            "index": 1,
+            "first_page": 1,
+            "input": "batch_001.pdf",
+            "output": "batches/batch_001",
+            "status": "succeeded",
+        },
+        {
+            "index": 2,
+            "first_page": 2,
+            "input": "batch_002.pdf",
+            "output": "batches/batch_002",
+            "status": "pending",
+        },
+    ]
+    ocr_pipeline._write_batch_manifest(
+        output_dir,
+        ocr_pipeline._batch_manifest_identity(previous_options),
+        manifest_entries,
+    )
     fake_client = FakeBatchOcrClient()
     monkeypatch.setattr(ocr_pipeline, "_ocr_client_from_env", lambda: fake_client)
     monkeypatch.setattr(
@@ -383,6 +515,93 @@ def test_cli_ocr_batch_resumes_completed_persisted_batches(tmp_path, monkeypatch
     assert "Persisted page 1" in result_md
     assert "Page 2 text" in result_md
     assert [batch["status"] for batch in manifest["batches"]] == ["succeeded", "succeeded"]
+
+
+def test_cli_ocr_batch_reruns_persisted_output_when_input_or_options_change(tmp_path, monkeypatch):
+    pdf = tmp_path / "source.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    output_dir = tmp_path / "ocr_output"
+    batch_one = tmp_path / "batch_001.pdf"
+    batch_two = tmp_path / "batch_002.pdf"
+    batch_one.write_bytes(b"batch one")
+    batch_two.write_bytes(b"batch two")
+    previous_client = FakeBatchOcrClient()
+    previous_client.parse_to_output(batch_one, output_dir / "batches" / "batch_001")
+    previous_client.parse_to_output(batch_two, output_dir / "batches" / "batch_002")
+    previous_options = ocr_pipeline.OcrOptions(
+        source_pdf=pdf,
+        output_dir=output_dir,
+        batch_size=2,
+        max_pages=2,
+    )
+    previous_entries = [
+        {
+            "index": 1,
+            "first_page": 1,
+            "input": "batch_001.pdf",
+            "output": "batches/batch_001",
+            "status": "succeeded",
+        },
+        {
+            "index": 2,
+            "first_page": 2,
+            "input": "batch_002.pdf",
+            "output": "batches/batch_002",
+            "status": "succeeded",
+        },
+    ]
+    ocr_pipeline._write_batch_manifest(
+        output_dir,
+        ocr_pipeline._batch_manifest_identity(previous_options),
+        previous_entries,
+    )
+    fake_client = FakeBatchOcrClient()
+    monkeypatch.setattr(ocr_pipeline, "_ocr_client_from_env", lambda: fake_client)
+    monkeypatch.setattr(
+        ocr_pipeline,
+        "split_pdf_batches",
+        lambda _source, _batch_size, _work_dir, _max_pages=None, _page_range=None: [
+            ocr_pipeline.OcrBatch(path=batch_one, first_page=1),
+            ocr_pipeline.OcrBatch(path=batch_two, first_page=2),
+        ],
+    )
+
+    exit_code = cli.main(
+        [
+            "ocr",
+            "--source-pdf",
+            str(pdf),
+            "--output-dir",
+            str(output_dir),
+            "--batch-size",
+            "1",
+            "--max-pages",
+            "2",
+        ]
+    )
+
+    assert exit_code == 0
+    assert fake_client.calls == ["batch_001.pdf", "batch_002.pdf"]
+    pdf.write_bytes(b"%PDF-1.4 updated source")
+    source_changed_client = FakeBatchOcrClient()
+    monkeypatch.setattr(ocr_pipeline, "_ocr_client_from_env", lambda: source_changed_client)
+
+    exit_code = cli.main(
+        [
+            "ocr",
+            "--source-pdf",
+            str(pdf),
+            "--output-dir",
+            str(output_dir),
+            "--batch-size",
+            "1",
+            "--max-pages",
+            "2",
+        ]
+    )
+
+    assert exit_code == 0
+    assert source_changed_client.calls == ["batch_001.pdf", "batch_002.pdf"]
 
 
 def test_ocr_batch_failure_keeps_successful_batches_and_can_resume(tmp_path, monkeypatch):

@@ -1,7 +1,10 @@
+import base64
 import json
 from urllib.error import URLError
 
 import pytest
+
+import ocr_client.client as ocr_client_module
 
 from ocr_client import (
     MissingOcrConfigError,
@@ -116,6 +119,70 @@ def test_write_ocr_output_creates_standard_files(tmp_path):
     assert source_map["blocks"][1]["source_page"] == 1
 
 
+def test_write_ocr_output_writes_inline_assets_only_under_assets_directory(tmp_path):
+    output_dir = tmp_path / "ocr_output"
+
+    write_ocr_output(
+        {
+            "blocks": [],
+            "assets": [
+                {
+                    "path": "assets/figures/page-001.png",
+                    "content_base64": base64.b64encode(b"image data").decode("ascii"),
+                }
+            ],
+        },
+        output_dir,
+    )
+
+    assert (output_dir / "assets" / "figures" / "page-001.png").read_bytes() == b"image data"
+
+
+@pytest.mark.parametrize(
+    "unsafe_path",
+    ["../outside.png", "/tmp/outside.png", "assets/../outside.png", r"assets\\outside.png"],
+)
+def test_write_ocr_output_rejects_unsafe_inline_asset_paths_before_writing(tmp_path, unsafe_path):
+    output_dir = tmp_path / "ocr_output"
+
+    with pytest.raises(OcrApiError, match="safe relative path"):
+        write_ocr_output(
+            {
+                "blocks": [],
+                "assets": [
+                    {
+                        "path": unsafe_path,
+                        "content_base64": base64.b64encode(b"image data").decode("ascii"),
+                    }
+                ],
+            },
+            output_dir,
+        )
+
+    assert not output_dir.exists()
+
+
+def test_write_ocr_output_rejects_invalid_base64_without_writing_prior_assets(tmp_path):
+    output_dir = tmp_path / "ocr_output"
+
+    with pytest.raises(OcrApiError, match="invalid base64 content"):
+        write_ocr_output(
+            {
+                "blocks": [],
+                "assets": [
+                    {
+                        "path": "assets/valid.png",
+                        "content_base64": base64.b64encode(b"valid image").decode("ascii"),
+                    },
+                    {"path": "assets/invalid.png", "content_base64": "not base64!"},
+                ],
+            },
+            output_dir,
+        )
+
+    assert not output_dir.exists()
+
+
 def test_ocr_job_client_checks_health_and_downloads_job_files(tmp_path):
     pdf = tmp_path / "source.pdf"
     pdf.write_bytes(b"%PDF-1.4 job")
@@ -185,6 +252,116 @@ def test_ocr_job_client_checks_health_and_downloads_job_files(tmp_path):
     assert [block["block_id"] for block in source_map["blocks"]] == ["p1"]
     assert source_map["blocks"][0]["source_text"] == "Grid inverter"
     assert (output_dir / "parse.log").read_text(encoding="utf-8") == "job ok\n"
+
+
+def test_ocr_job_client_rejects_cross_origin_file_urls_before_downloading(tmp_path):
+    pdf = tmp_path / "source.pdf"
+    pdf.write_bytes(b"%PDF-1.4 unsafe job")
+    download_calls = []
+
+    def fake_submit(_pdf_bytes, _filename, _config):
+        return {
+            "job_id": "job-cross-origin",
+            "status": "succeeded",
+            "files": {
+                "result_md": "https://attacker.example.test/result.md",
+                "result_json": "/v1/jobs/job-cross-origin/files/result.json",
+                "parse_log": "/v1/jobs/job-cross-origin/files/parse.log",
+            },
+        }
+
+    def fake_download(file_url, _config):
+        download_calls.append(file_url)
+        return b"unexpected"
+
+    client = OcrJobClient(
+        OcrApiConfig(api_url="https://ocr.example.test", api_key="secret"),
+        submit_transport=fake_submit,
+        download_transport=fake_download,
+        poll_interval_seconds=0,
+        retry_delay_seconds=0,
+    )
+
+    with pytest.raises(OcrApiError, match="same origin"):
+        client.parse_to_output(pdf, tmp_path / "ocr_output")
+
+    assert download_calls == []
+
+
+def test_ocr_job_client_allows_same_origin_absolute_file_urls(tmp_path):
+    pdf = tmp_path / "source.pdf"
+    pdf.write_bytes(b"%PDF-1.4 same origin")
+    file_base = "https://ocr.example.test:8443/v1/jobs/job-same-origin/files"
+    download_calls = []
+
+    def fake_submit(_pdf_bytes, _filename, _config):
+        return {
+            "job_id": "job-same-origin",
+            "status": "succeeded",
+            "files": {
+                "result_md": f"{file_base}/result.md",
+                "result_json": f"{file_base}/result.json",
+                "parse_log": f"{file_base}/parse.log",
+            },
+        }
+
+    def fake_download(file_url, _config):
+        download_calls.append(file_url)
+        if file_url.endswith("result.md"):
+            return b"Same-origin download\n"
+        if file_url.endswith("result.json"):
+            return b'{"blocks": []}'
+        return b"same-origin log\n"
+
+    client = OcrJobClient(
+        OcrApiConfig(api_url="https://ocr.example.test:8443/api", api_key="secret"),
+        submit_transport=fake_submit,
+        download_transport=fake_download,
+        poll_interval_seconds=0,
+        retry_delay_seconds=0,
+    )
+
+    output_dir = tmp_path / "ocr_output"
+    client.parse_to_output(pdf, output_dir)
+
+    assert download_calls == [
+        f"{file_base}/result.md",
+        f"{file_base}/result.json",
+        f"{file_base}/parse.log",
+    ]
+    assert (output_dir / "result.md").read_bytes() == b"Same-origin download\n"
+
+
+def test_job_download_refuses_cross_origin_url_before_sending_authorization(monkeypatch):
+    requests = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, _exc_type, _exc_value, _traceback):
+            return False
+
+        def read(self):
+            return b"same-origin content"
+
+    def fake_job_urlopen(http_request, timeout):
+        requests.append((http_request, timeout))
+        return FakeResponse()
+
+    monkeypatch.setattr(ocr_client_module, "_job_urlopen", fake_job_urlopen)
+    config = OcrApiConfig(api_url="https://ocr.example.test", api_key="secret")
+
+    assert (
+        ocr_client_module._job_download_transport("/v1/jobs/job-1/files/result.md", config)
+        == b"same-origin content"
+    )
+    assert requests[0][0].get_header("Authorization") == "Bearer secret"
+
+    with pytest.raises(OcrApiError, match="same origin"):
+        ocr_client_module._job_download_transport("https://attacker.example.test/result.md", config)
+
+    assert len(requests) == 1
 
 
 def test_ocr_job_client_polls_queued_jobs_before_downloading(tmp_path):
